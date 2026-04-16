@@ -1,0 +1,20 @@
+# CinematicManager Configuration
+
+# Language Settings
+# Available: en, ko
+language: "en"
+
+# Skip Settings
+skip-settings:
+  # Use Shift (Sneak) to skip
+  use-shift: true
+  
+  # Use F (Swap Hands) to skip
+  use-f: false
+  
+  # Require both keys to skip (Shift + F)
+  require-both: false
+
+# Development Settings
+debug-mode: false
+save-path: "data"

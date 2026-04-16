@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="CinematicManager:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/CinematicManager_jar</output-path>
+    <root id="archive" name="CinematicManager.jar">
+      <element id="module-output" name="CinematicManager" />
+    </root>
+  </artifact>
+</component>

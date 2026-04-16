@@ -1,0 +1,19 @@
+name: CinematicManager
+version: 1.0
+main: com.gmail.bobason01.cinematicmanager.CinematicManager
+api-version: 1.21
+depend: [ProtocolLib]
+softdepend: [PlaceholderAPI, MythicMobs, ModelEngine]
+author: crston
+commands:
+  cinematic:
+    description: Cinematic Manager Main Command
+    aliases: [cutscene, cm]
+    permission: cinematic.use
+permissions:
+  cinematic.use:
+    description: Allow use of basic cinematic commands
+    default: op
+  cinematic.admin:
+    description: Allow administrative actions like deleting cinematics
+    default: op

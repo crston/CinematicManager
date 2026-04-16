@@ -1,0 +1,140 @@
+prefix: "&6&lCinematic &8| &f"
+
+menu:
+  main: "&8시네마틱 매니저"
+  main_list: "&e&l시네마틱 목록"
+  main_list_lore:
+    - ""
+    - "&7저장된 연출 프로젝트를 확인하고"
+    - "&7편집하거나 관리합니다."
+  main_create: "&a&l새 프로젝트 생성"
+  main_create_lore:
+    - ""
+    - "&7새로운 시네마틱 프로젝트를"
+    - "&7시작합니다."
+
+  list: "&8시네마틱 목록"
+  list_id: "&f아이디 &8» &b{id}"
+  list_edit_lore:
+    - ""
+    - "&e좌클릭 &8» &f스튜디오 입장"
+  list_delete_lore:
+    - "&c우클릭 &8» &f프로젝트 삭제"
+  list_prev: "&e◀ 이전 페이지"
+  list_back: "&7◀ 메뉴로 돌아가기"
+  list_next: "&e다음 페이지 ▶"
+
+  studio: "&8스튜디오 &8| &0{id}"
+  studio_time: "&6&l시간 &8» &e{tick} 틱"
+  studio_current: "&f&l타임라인 정보"
+  studio_add_action: "&a&l+ &fNPC 액션 추가"
+  studio_add_action_lore:
+    - "&7스폰, 이동, 애니메이션, 숨기기 등"
+    - "&7NPC 연출을 추가합니다."
+  studio_action_name: "&b액션 &8» &f{type}"
+  studio_action_target: "&3대상 &8» &f{target}"
+  studio_add_camera: "&6&l+ &f카메라 설정"
+  studio_add_camera_lore:
+    - "&7고정 카메라 또는 녹화된"
+    - "&7카메라 경로를 설정합니다."
+  studio_camera_name: "&6카메라 &8» &f{type}"
+  studio_add_effect: "&d&l+ &f이펙트 추가"
+  studio_add_effect_lore:
+    - "&7사운드, 파티클, 타이틀 등의"
+    - "&7특수 효과를 추가합니다."
+  studio_effect_name: "&d이펙트 &8» &f{type}"
+  studio_effect_value: "&7값 &8» &f{value}"
+  studio_delete_lore:
+    - ""
+    - "&c우클릭 &8» &f액션 제거"
+  studio_prev: "&e◀ 이전 틱"
+  studio_back: "&7◀ 편집 종료"
+  studio_play: "&a&l▶ &2시네마틱 프리뷰"
+  studio_save: "&b&l💾 &3진행 상황 저장"
+  studio_stop: "&c&l⏹ &4프리뷰 정지"
+  studio_next: "&e다음 틱 ▶"
+
+  action: "&8액션 선택"
+  action_spawn: "&aNPC 소환"
+  action_spawn_lore:
+    - "&7NPC, 신화몹, 모델엔진을"
+    - "&7해당 위치에 소환합니다."
+  action_move: "&e이동 녹화"
+  action_move_lore:
+    - "&7NPC의 움직임을 직접"
+    - "&7조종하여 녹화합니다."
+  action_animation: "&6애니메이션 설정"
+  action_animation_lore:
+    - "&7동작, 크기 조절, 상태 제어 등"
+    - "&7NPC의 상세 상태를 설정합니다."
+  action_hide: "&cNPC 숨기기"
+  action_hide_lore:
+    - "&7대상 NPC를 투명하게 만듭니다."
+  action_show: "&bNPC 보이기"
+  action_show_lore:
+    - "&7숨겨진 NPC를 다시 보여줍니다."
+  action_back: "&7뒤로가기"
+
+  animation: "&8애니메이션 및 상태 선택"
+  animation_spin: "&f회전 (SPIN)"
+  animation_spin_lore: ["&7NPC를 회전 상태로 만듭니다."]
+  animation_sprint: "&f달리기 (SPRINT)"
+  animation_sprint_lore: ["&7NPC를 달리는 상태로 만듭니다."]
+  animation_swim: "&f수영 (SWIM)"
+  animation_swim_lore: ["&7NPC를 수영하는 상태로 만듭니다."]
+  animation_sneak: "&f웅크리기 (SNEAK)"
+  animation_sneak_lore: ["&7NPC를 웅크린 상태로 만듭니다."]
+  animation_sleep: "&f눕기 (SLEEP)"
+  animation_sleep_lore: ["&7NPC를 누운 상태로 만듭니다."]
+  animation_custom: "&b모델엔진 스테이트"
+  animation_custom_lore: ["&7재생할 애니메이션 이름을 입력합니다."]
+  animation_stop: "&4애니메이션 정지"
+  animation_stop_lore: ["&7재생 중인 특정 상태를 중단합니다."]
+
+  # [수정] _name 접미사를 사용하여 예약어 충돌 방지
+  toggle:
+    title: "&8상태 선택 &8| &0{type}"
+    on_name: "&a&lON"
+    on_lore: ["&7해당 상태를 활성화합니다."]
+    off_name: "&c&lOFF"
+    off_lore: ["&7해당 상태를 비활성화합니다."]
+
+  npc: "&8대상 NPC 선택"
+  npc_name: "&fNPC &8» &b{name}"
+  npc_select_lore:
+    - ""
+    - "&e클릭 &8» &f이 NPC를 선택"
+  npc_id_lore:
+    - "&8식별자 &8» &7{id}"
+  npc_back: "&7뒤로가기"
+
+  effect: "&8이펙트 선택"
+  effect_sound: "&f사운드 재생"
+  effect_sound_lore: ["&7재생할 사운드 노드 입력"]
+  effect_particle: "&f파티클 생성"
+  effect_particle_lore: ["&7생성할 파티클 이름 입력"]
+  effect_title: "&f타이틀 표시"
+  effect_title_lore: ["&7형식: 제목;부제목"]
+  effect_message: "&f메시지 전송"
+  effect_message_lore: ["&7채팅창 출력 메시지 입력"]
+  effect_back: "&7뒤로가기"
+
+msg:
+  input_name: "&e시네마틱 이름을 입력해주세요."
+  input_spawn: "&eNPC 데이터를 입력하세요 (타입:ID:스킨)"
+  input_sound: "&e사운드 노드를 입력하세요."
+  input_particle: "&e파티클 이름을 입력하세요."
+  input_title: "&e타이틀을 입력하세요 (제목;부제목)"
+  input_message: "&e메시지 내용을 입력하세요."
+  input_animation: "&e실행할 애니메이션 이름을 입력하세요."
+  input_anim_stop: "&e중단할 애니메이션 이름을 입력하세요."
+  create_success: "&a프로젝트가 생성되었습니다."
+  save_success: "&a데이터가 저장되었습니다."
+  delete_admin: "&c권한이 없습니다."
+  camera_static_set: "&6고정 카메라가 설정되었습니다."
+  record_start: "&c&l● &f녹화 중... &7(SHIFT로 중단)"
+  record_end: "&a&l✔ &f녹화가 완료되었습니다."
+
+btn:
+  camera_static: "&6&l고정 카메라 설정"
+  camera_record: "&c&l카메라 이동 녹화 시작"

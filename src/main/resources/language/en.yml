@@ -1,0 +1,139 @@
+prefix: "&6&lCinematic &8| &f"
+
+menu:
+  main: "&8Cinematic Manager"
+  main_list: "&e&lCinematic List"
+  main_list_lore:
+    - ""
+    - "&7Review and manage all saved"
+    - "&7cinematic projects."
+  main_create: "&a&lCreate New Project"
+  main_create_lore:
+    - ""
+    - "&7Start a new cinematic"
+    - "&7production."
+
+  list: "&8Cinematic List"
+  list_id: "&fID &8» &b{id}"
+  list_edit_lore:
+    - ""
+    - "&eLeft-Click &8» &fEnter Studio"
+  list_delete_lore:
+    - "&cRight-Click &8» &fDelete Project"
+  list_prev: "&e◀ Previous Page"
+  list_back: "&7◀ Back to Menu"
+  list_next: "&eNext Page ▶"
+
+  studio: "&8Studio &8| &0{id}"
+  studio_time: "&6&lTime &8» &e{tick} Ticks"
+  studio_current: "&f&lTimeline Info"
+  studio_add_action: "&a&l+ &fAdd NPC Action"
+  studio_add_action_lore:
+    - "&7Spawn, Move, Animate, or Hide"
+    - "&7NPCs in the timeline."
+  studio_action_name: "&bAction &8» &f{type}"
+  studio_action_target: "&3Target &8» &f{target}"
+  studio_add_camera: "&6&l+ &fSet Camera"
+  studio_add_camera_lore:
+    - "&7Configure static or recorded"
+    - "&7camera paths."
+  studio_camera_name: "&6Camera &8» &f{type}"
+  studio_add_effect: "&d&l+ &fAdd Effect"
+  studio_add_effect_lore:
+    - "&7Add sound, particle, title,"
+    - "&7or chat messages."
+  studio_effect_name: "&dEffect &8» &f{type}"
+  studio_effect_value: "&7Value &8» &f{value}"
+  studio_delete_lore:
+    - ""
+    - "&cRight-Click &8» &fRemove Action"
+  studio_prev: "&e◀ Prev Tick"
+  studio_back: "&7◀ Exit Studio"
+  studio_play: "&a&l▶ &2Preview Cinematic"
+  studio_save: "&b&l💾 &3Save Progress"
+  studio_stop: "&c&l⏹ &4Stop Preview"
+  studio_next: "&eNext Tick ▶"
+
+  action: "&8Select Action"
+  action_spawn: "&aSpawn NPC"
+  action_spawn_lore:
+    - "&7Summon NPC, MythicMob, or"
+    - "&7ModelEngine at this location."
+  action_move: "&eRecord Movement"
+  action_move_lore:
+    - "&7Control the NPC manually"
+    - "&7to record its path."
+  action_animation: "&6Set Animation"
+  action_animation_lore:
+    - "&7Set gestures, or state"
+    - "&7controls for the NPC."
+  action_hide: "&cHide NPC"
+  action_hide_lore:
+    - "&7Make the NPC invisible via packets."
+  action_show: "&bShow NPC"
+  action_show_lore:
+    - "&7Make the hidden NPC visible again."
+  action_back: "&7Back"
+
+  animation: "&8Select Animation & States"
+  animation_spin: "&fSpinning (SPIN)"
+  animation_spin_lore: ["&7Sets the NPC to spinning state."]
+  animation_sprint: "&fSprinting (SPRINT)"
+  animation_sprint_lore: ["&7Sets the NPC to sprinting state."]
+  animation_swim: "&fSwimming (SWIM)"
+  animation_swim_lore: ["&7Sets the NPC to swimming state."]
+  animation_sneak: "&fSneaking (SNEAK)"
+  animation_sneak_lore: ["&7Sets the NPC to sneaking state."]
+  animation_sleep: "&fSleeping (SLEEP)"
+  animation_sleep_lore: ["&7Sets the NPC to sleeping state."]
+  animation_custom: "&bModelEngine State"
+  animation_custom_lore: ["&7Enter ModelEngine animation name."]
+  animation_stop: "&4Stop Animation"
+  animation_stop_lore: ["&7Stops a specific playing state."]
+
+  toggle:
+    title: "&8Select State &8| &0{type}"
+    on_name: "&a&lON"
+    on_lore: ["&7Enable this state."]
+    off_name: "&c&lOFF"
+    off_lore: ["&7Disable this state."]
+
+  npc: "&8Select Target NPC"
+  npc_name: "&fNPC &8» &b{name}"
+  npc_select_lore:
+    - ""
+    - "&eClick &8» &fSelect this NPC"
+  npc_id_lore:
+    - "&8Identifier &8» &7{id}"
+  npc_back: "&7Back"
+
+  effect: "&8Select Effect"
+  effect_sound: "&fPlay Sound"
+  effect_sound_lore: ["&7Enter sound node in chat"]
+  effect_particle: "&fSpawn Particle"
+  effect_particle_lore: ["&7Enter particle name in chat"]
+  effect_title: "&fDisplay Title"
+  effect_title_lore: ["&7Format: Title;Subtitle"]
+  effect_message: "&fSend Message"
+  effect_message_lore: ["&7Enter chat message to send"]
+  effect_back: "&7Back"
+
+msg:
+  input_name: "&ePlease type the cinematic name in chat."
+  input_spawn: "&eEnter NPC data (Type:ID:Skin)"
+  input_sound: "&eEnter sound node name."
+  input_particle: "&eEnter particle name."
+  input_title: "&eEnter title text (Title;Subtitle)"
+  input_message: "&eEnter the message content."
+  input_animation: "&eEnter the animation name to play."
+  input_anim_stop: "&eEnter the animation name to stop."
+  create_success: "&aCinematic project created successfully."
+  save_success: "&aData has been saved successfully."
+  delete_admin: "&cYou do not have permission."
+  camera_static_set: "&6Static camera set at your current location."
+  record_start: "&c&l● &fRecording... &7(Press SHIFT to stop)"
+  record_end: "&a&l✔ &fRecording finished and path saved."
+
+btn:
+  camera_static: "&6&lSET STATIC CAMERA"
+  camera_record: "&c&lSTART CAMERA RECORDING"
