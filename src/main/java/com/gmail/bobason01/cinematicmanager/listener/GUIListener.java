@@ -135,8 +135,9 @@ public class GUIListener implements Listener {
             case 12 -> plugin.getGuiManager().openToggleGUI(player, "SWIM");
             case 13 -> plugin.getGuiManager().openToggleGUI(player, "SNEAK");
             case 14 -> plugin.getGuiManager().openToggleGUI(player, "SLEEP");
-            case 20 -> { player.closeInventory(); player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_ANIMATION)); plugin.getChatInputListener().startTrackInput(player, id, "STATE", t); }
-            case 24 -> { player.closeInventory(); player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_ANIM_STOP)); plugin.getChatInputListener().startTrackInput(player, id, "STOP", t); }
+            // 수정 포인트: 바로 채팅 입력을 받지 않고 타겟 NPC 선택 GUI를 먼저 엶
+            case 20 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STATE");
+            case 24 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STOP");
             case 31 -> plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
         }
     }
@@ -165,6 +166,17 @@ public class GUIListener implements Listener {
         if (mode.equals("MOVE")) {
             player.closeInventory();
             new BukkitRunnable() { @Override public void run() { new RecordSession(plugin, player, id, t, CinematicAction.ActionType.MOVE_NPC, target).start(); } }.runTask(plugin);
+        } else if (mode.equals("STATE") || mode.equals("STOP")) {
+            // 수정 포인트: NPC 선택 완료 후 메타데이터에 타겟 저장 및 채팅 입력 시작
+            player.closeInventory();
+            player.setMetadata("edit_npc_target", new FixedMetadataValue(plugin, target));
+            if (mode.equals("STATE")) {
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_ANIMATION));
+                plugin.getChatInputListener().startTrackInput(player, id, "STATE", t);
+            } else {
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_ANIM_STOP));
+                plugin.getChatInputListener().startTrackInput(player, id, "STOP", t);
+            }
         } else {
             CinematicAction.ActionType type = CinematicAction.ActionType.ANIMATION;
             String val = mode;
