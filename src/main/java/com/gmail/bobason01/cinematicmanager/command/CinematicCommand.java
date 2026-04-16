@@ -25,7 +25,7 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
 
     public CinematicCommand(CinematicManager plugin) {
         this.plugin = plugin;
-        this.subCommands = Arrays.asList("create", "edit", "play", "stop", "list");
+        this.subCommands = Arrays.asList("create", "edit", "play", "stop", "list", "reload");
     }
 
     @Override
@@ -51,13 +51,11 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                 if (data == null) return true;
 
                 if (camType.equals("static")) {
-                    // 수정 포인트: 인수를 4개(type, value, loc, extra)만 전달
                     data.addAction(tick, new CinematicAction(CinematicAction.ActionType.CAMERA, "static", player.getLocation(), null));
                     plugin.getDataManager().saveCinematic(data);
                     player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_CAMERA_STATIC_SET));
                     plugin.getGuiManager().openStudioGUI(player, id, tick / 180);
                 } else if (camType.equals("record")) {
-                    // RecordSession 생성자 및 시작
                     RecordSession recordSession = new RecordSession(plugin, player, id, tick, CinematicAction.ActionType.CAMERA, null);
                     recordSession.start();
                 }
@@ -73,7 +71,7 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                 }
                 String id = args[1];
                 plugin.getDataManager().createCinematic(id);
-                // DataManager의 saveCinematic은 보통 Data 객체를 받으므로 새로 생성된 객체를 가져와 저장
+
                 CinematicData newData = plugin.getDataManager().getCinematic(id);
                 if (newData != null) plugin.getDataManager().saveCinematic(newData);
 
@@ -132,6 +130,25 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
             case "list": {
                 if (!(sender instanceof Player)) return true;
                 plugin.getGuiManager().openCutsceneList((Player) sender, 0);
+                return true;
+            }
+
+            case "reload": {
+                if (sender instanceof Player && !sender.isOp()) {
+                    sender.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_DELETE_ADMIN));
+                    return true;
+                }
+
+                // 메인 configyml 리로드
+                plugin.reloadConfig();
+
+                // 다국어 언어 파일 리로드 및 캐시 갱신
+                plugin.getLangManager().load();
+
+                // 시네마틱 데이터 파일 리로드
+                plugin.getDataManager().loadAll();
+
+                sender.sendMessage("§a[CinematicManager] Configuration, Language, and Cinematic files have been reloaded.");
                 return true;
             }
         }
