@@ -4,6 +4,7 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -27,6 +28,7 @@ public class CinematicSession {
     private int currentTick = 0;
     private int maxTick = 0;
 
+    // 키 관리: PAPI 치환 전의 원본 ID를 키로 사용합니다.
     private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
     private final Map<String, Location> spawnLocations = new ConcurrentHashMap<>();
     private final Map<String, ActivePath> movingNpcs = new ConcurrentHashMap<>();
@@ -47,9 +49,13 @@ public class CinematicSession {
         this(plugin, player, plugin.getConfigManager().getCinematic(id));
     }
 
+    /**
+     * ID 비교를 위한 정규화 메서드.
+     * PAPI 치환은 하지 않고, 공백 및 색상코드 등만 제거하여 원본 비교의 정확도를 높입니다.
+     */
     private String sanitize(String id) {
         if (id == null) return "";
-        String clean = org.bukkit.ChatColor.stripColor(id);
+        String clean = ChatColor.stripColor(id);
         if (clean.contains("»")) clean = clean.split("»")[1];
         else if (clean.contains("|")) clean = clean.split("\\|")[1];
         return clean.replace("[ID:", "").replace("[", "").replace("]", "").trim().toLowerCase();
@@ -87,9 +93,8 @@ public class CinematicSession {
         Iterator<Map.Entry<String, ActivePath>> it = movingNpcs.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, ActivePath> entry = it.next();
-            String targetKey = entry.getKey();
             ActivePath path = entry.getValue();
-            Entity entity = findEntity(targetKey);
+            Entity entity = findEntity(entry.getKey());
             int elapsed = currentTick - path.startTick;
 
             if (entity == null || !entity.isValid() || elapsed >= path.relativeLocations.size()) {
@@ -97,21 +102,29 @@ public class CinematicSession {
                 continue;
             }
 
-            // 기준 스폰 위치 + 상대 좌표 계산
             Location rel = path.relativeLocations.get(elapsed);
             Location finalLoc = path.baseOrigin.clone().add(rel.getX(), rel.getY(), rel.getZ());
             finalLoc.setYaw(rel.getYaw());
             finalLoc.setPitch(rel.getPitch());
-
             plugin.getNpcManager().move(player, entity, finalLoc);
         }
     }
 
+    /**
+     * 엔티티 검색: 원본 데이터의 키를 기준으로 찾습니다.
+     */
     private Entity findEntity(String key) {
-        String clean = sanitize(key);
-        if (activeEntities.containsKey(clean)) return activeEntities.get(clean);
+        if (key == null) return null;
+        String searchKey = sanitize(key);
+
+        // 원본 키 직접 매칭
+        if (activeEntities.containsKey(searchKey)) return activeEntities.get(searchKey);
+
+        // 유사 키 매칭
         for (Map.Entry<String, Entity> entry : activeEntities.entrySet()) {
-            if (entry.getKey().contains(clean) || clean.contains(entry.getKey())) return entry.getValue();
+            if (entry.getKey().contains(searchKey) || searchKey.contains(entry.getKey())) {
+                return entry.getValue();
+            }
         }
         return null;
     }
@@ -129,61 +142,63 @@ public class CinematicSession {
             case HIDE_ENTITY -> handleHide(action);
             case SHOW_ENTITY -> handleShow(action);
             case ANIMATION -> {
+                // extra(대상 ID) 원본을 그대로 사용하여 엔티티를 찾음
                 Entity e = findEntity(action.getExtra());
-                if (e != null) plugin.getNpcManager().playAnimation(player, e, action.getValue());
+                if (e != null) {
+                    String animValue = action.getValue();
+                    if (hasPapi) animValue = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, animValue);
+                    plugin.getNpcManager().playAnimation(player, e, animValue);
+                }
             }
         }
     }
 
     private void handleSpawn(CinematicAction action) {
-        String raw = action.getValue();
-        if (hasPapi) raw = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, raw);
-        String cleanKey = sanitize(raw);
+        String rawValue = action.getValue();
+        // 키는 변수를 포함한 원본(예: npc:%player_name%)을 정규화하여 사용
+        String cleanKey = sanitize(rawValue);
+
+        // 실제 스폰할 때만 PAPI 치환 적용
+        String spawnName = rawValue;
+        if (hasPapi) spawnName = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, spawnName);
+
         Location loc = action.getLocation().clone();
         Entity npc = null;
-        String lowerRaw = raw.toLowerCase();
+        String lowerSpawn = spawnName.toLowerCase();
 
-        if (lowerRaw.contains("npc:")) {
-            String val = raw.substring(lowerRaw.indexOf("npc:") + 4);
+        if (lowerSpawn.contains("npc:")) {
+            String val = spawnName.substring(lowerSpawn.indexOf("npc:") + 4);
             String[] split = val.split(":");
             npc = plugin.getNpcManager().spawnNPC(player, loc, split[0], split.length > 1 ? split[1] : split[0]);
-        } else if (lowerRaw.contains("mythicmobs:")) {
-            npc = plugin.getNpcManager().spawnMythicMob(player, raw.substring(lowerRaw.indexOf("mythicmobs:") + 11).trim(), loc);
-        } else if (lowerRaw.contains("modelengine:")) {
-            npc = plugin.getNpcManager().spawnModelEngine(player, raw.substring(lowerRaw.indexOf("modelengine:") + 12).trim(), loc);
+        } else if (lowerSpawn.contains("mythicmobs:")) {
+            npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(lowerSpawn.indexOf("mythicmobs:") + 11).trim(), loc);
+        } else if (lowerSpawn.contains("modelengine:")) {
+            npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(lowerSpawn.indexOf("modelengine:") + 12).trim(), loc);
         }
 
         if (npc != null) {
             activeEntities.put(cleanKey, npc);
-            spawnLocations.put(cleanKey, loc); // 스폰 시 실제 월드 좌표 저장
+            spawnLocations.put(cleanKey, loc);
         }
     }
 
     private void handleNpcMove(CinematicAction action) {
-        String extra = action.getExtra();
-        if (hasPapi) extra = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, extra);
-        String targetKey = sanitize(extra);
+        String targetKey = sanitize(action.getExtra());
         List<Location> relativePath = data.getPathRecord(action.getValue());
 
-        Location origin = null;
-        String finalKey = null;
-
-        // 해당 NPC의 스폰 위치 찾기
-        if (spawnLocations.containsKey(targetKey)) {
-            origin = spawnLocations.get(targetKey);
-            finalKey = targetKey;
-        } else {
+        Location origin = spawnLocations.get(targetKey);
+        if (origin == null) {
             for (Map.Entry<String, Location> entry : spawnLocations.entrySet()) {
                 if (entry.getKey().contains(targetKey) || targetKey.contains(entry.getKey())) {
                     origin = entry.getValue();
-                    finalKey = entry.getKey();
+                    targetKey = entry.getKey();
                     break;
                 }
             }
         }
 
         if (relativePath != null && !relativePath.isEmpty() && origin != null) {
-            movingNpcs.put(finalKey, new ActivePath(relativePath, currentTick, origin));
+            movingNpcs.put(targetKey, new ActivePath(relativePath, currentTick, origin));
         }
     }
 
@@ -194,7 +209,6 @@ public class CinematicSession {
         } else {
             List<Location> relativePath = data.getPathRecord(action.getValue());
             if (relativePath != null && !relativePath.isEmpty()) {
-                // 카메라 클릭 지점(action.getLocation)을 기준으로 상대 좌표 적용
                 Location origin = action.getLocation();
                 List<Location> absolutePath = new ArrayList<>();
                 for (Location rel : relativePath) {
@@ -215,7 +229,6 @@ public class CinematicSession {
         else if (cameraPath != null && cameraStep < cameraPath.size()) player.teleport(cameraPath.get(cameraStep++));
     }
 
-    // handleParticle, handleTitle, handleMessage, handleCommand, handleHide, handleShow 동일...
     private void handleParticle(CinematicAction action) {
         try { player.spawnParticle(Particle.valueOf(action.getValue().toUpperCase()), action.getLocation(), 20, 0.5, 0.5, 0.5, 0.05); } catch (Exception ignored) {}
     }
@@ -246,7 +259,7 @@ public class CinematicSession {
     }
 
     private void handleShow(CinematicAction action) {
-        Entity e = findEntity(action.getValue());
+        Entity e = findEntity(action.getExtra() != null ? action.getExtra() : action.getValue());
         if (e != null) e.teleport(action.getLocation());
     }
 
