@@ -91,6 +91,28 @@ public class GUIManager {
         player.openInventory(inv);
     }
 
+    public void openSpawnTypeGUI(Player player, String id, int tick, int page) {
+        LangManager lang = plugin.getLangManager();
+        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_SPAWN_TYPE));
+        inv.setItem(11, createItem(Material.ZOMBIE_HEAD, lang.get(LangKey.MENU_SPAWN_TYPE_NPC)));
+        inv.setItem(13, createItem(Material.ZOMBIE_SPAWN_EGG, lang.get(LangKey.MENU_SPAWN_TYPE_MM)));
+        inv.setItem(15, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_SPAWN_TYPE_ME)));
+        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
+        player.openInventory(inv);
+    }
+
+    public void openNPCTypeGUI(Player player, String id, int tick, int page) {
+        LangManager lang = plugin.getLangManager();
+        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_NPC_TYPE));
+        inv.setItem(10, createItem(Material.PLAYER_HEAD, lang.get(LangKey.MENU_NPC_TYPE_PLAYER)));
+        inv.setItem(11, createItem(Material.ZOMBIE_HEAD, lang.get(LangKey.MENU_NPC_TYPE_ZOMBIE)));
+        inv.setItem(12, createItem(Material.PIG_SPAWN_EGG, lang.get(LangKey.MENU_NPC_TYPE_PIG)));
+        inv.setItem(13, createItem(Material.SKELETON_SKULL, lang.get(LangKey.MENU_NPC_TYPE_SKELETON)));
+        inv.setItem(16, createItem(Material.NAME_TAG, lang.get(LangKey.MENU_NPC_TYPE_CUSTOM), lang.get(LangKey.MENU_NPC_TYPE_CUSTOM_LORE)));
+        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
+        player.openInventory(inv);
+    }
+
     public void openAnimationSelectGUI(Player player, String id, int tick, int page) {
         LangManager lang = plugin.getLangManager();
         Inventory inv = Bukkit.createInventory(null, 36, lang.get(LangKey.MENU_ANIMATION));
@@ -99,7 +121,6 @@ public class GUIManager {
         inv.setItem(12, createItem(Material.PRISMARINE_SHARD, lang.get(LangKey.MENU_ANIMATION_SWIM), lang.get(LangKey.MENU_ANIMATION_SWIM_LORE)));
         inv.setItem(13, createItem(Material.SLIME_BALL, lang.get(LangKey.MENU_ANIMATION_SNEAK), lang.get(LangKey.MENU_ANIMATION_SNEAK_LORE)));
         inv.setItem(14, createItem(Material.WHITE_BED, lang.get(LangKey.MENU_ANIMATION_SLEEP), lang.get(LangKey.MENU_ANIMATION_SLEEP_LORE)));
-        // Scale 아이템(slot 16) 제거됨
         inv.setItem(20, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_ANIMATION_CUSTOM), lang.get(LangKey.MENU_ANIMATION_CUSTOM_LORE)));
         inv.setItem(24, createItem(Material.BARRIER, lang.get(LangKey.MENU_ANIMATION_STOP), lang.get(LangKey.MENU_ANIMATION_STOP_LORE)));
         inv.setItem(31, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));

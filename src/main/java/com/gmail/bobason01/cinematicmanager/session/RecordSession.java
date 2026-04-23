@@ -21,7 +21,7 @@ public class RecordSession {
     private final CinematicAction.ActionType recordType;
     private final String targetSlot;
     private final List<Location> recordedPath;
-    private final Location recordOrigin;
+    private final Location recordOrigin; // 기준점
     private boolean isRecording;
 
     public RecordSession(CinematicManager plugin, Player player, String cinematicId, int startTick, CinematicAction.ActionType recordType, String targetSlot) {
@@ -32,7 +32,23 @@ public class RecordSession {
         this.recordType = recordType;
         this.targetSlot = targetSlot;
         this.recordedPath = new ArrayList<>();
-        this.recordOrigin = player.getLocation().clone(); // 기준점 저장
+
+        // [핵심] 기준점을 플레이어 위치가 아닌, 소환된 액션의 위치에서 가져옴
+        CinematicData data = plugin.getDataManager().getCinematic(cinematicId);
+        Location origin = null;
+        if (data != null && targetSlot != null) {
+            for (List<CinematicAction> actions : data.getTimeline().values()) {
+                for (CinematicAction action : actions) {
+                    if (action.getType() == CinematicAction.ActionType.SPAWN_NPC && action.getValue().equals(targetSlot)) {
+                        origin = action.getLocation();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 소환 위치를 못 찾으면 현재 플레이어 위치를 기준점으로 (fallback)
+        this.recordOrigin = (origin != null) ? origin.clone() : player.getLocation().clone();
         this.isRecording = false;
     }
 
@@ -41,6 +57,9 @@ public class RecordSession {
         isRecording = true;
 
         player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_RECORD_START));
+
+        // 녹화 시작 시 플레이어를 기준점으로 텔레포트 시켜서 오차 방지
+        player.teleport(recordOrigin);
 
         new BukkitRunnable() {
             @Override
@@ -56,13 +75,12 @@ public class RecordSession {
                     return;
                 }
 
-                // 현재 위치에서 기준점을 뺀 상대 좌표를 기록용 리스트에 추가
                 Location current = player.getLocation();
                 Location relative = current.clone();
+                // 기준점(소환 위치)으로부터의 상대적 거리 기록
                 relative.setX(current.getX() - recordOrigin.getX());
                 relative.setY(current.getY() - recordOrigin.getY());
                 relative.setZ(current.getZ() - recordOrigin.getZ());
-                // 회전값(Yaw, Pitch)은 그대로 유지
 
                 recordedPath.add(relative);
             }
@@ -81,10 +99,8 @@ public class RecordSession {
         data.addPathRecord(recordId, recordedPath);
 
         if (recordType == CinematicAction.ActionType.CAMERA) {
-            // 카메라는 클릭한 지점(recordOrigin)에서 상대 경로가 시작되도록 설정
             data.addAction(startTick, new CinematicAction(CinematicAction.ActionType.CAMERA, recordId, recordOrigin, null));
         } else if (recordType == CinematicAction.ActionType.MOVE_NPC) {
-            // NPC 이동은 NPC가 스폰된 위치를 기준으로 상대 경로가 시작됨
             data.addAction(startTick, new CinematicAction(CinematicAction.ActionType.MOVE_NPC, recordId, recordOrigin, targetSlot));
         }
 

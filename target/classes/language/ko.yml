@@ -75,6 +75,21 @@ menu:
     - "&7숨겨진 NPC를 다시 보여줍니다."
   action_back: "&7뒤로가기"
 
+  spawn_type: "&8스폰 방식 선택"
+  spawn_type_npc: "&e&l일반 NPC"
+  spawn_type_mm: "&6&lMythicMobs"
+  spawn_type_me: "&b&lModelEngine"
+
+  npc_type: "&8NPC 타입 선택"
+  npc_type_player: "&f&l플레이어 (Player)"
+  npc_type_zombie: "&2&l좀비 (Zombie)"
+  npc_type_pig: "&d&l돼지 (Pig)"
+  npc_type_skeleton: "&7&l스켈레톤 (Skeleton)"
+  npc_type_custom: "&b&l직접 타입 입력"
+  npc_type_custom_lore:
+    - "&7엔티티 이름을 채팅으로 직접 입력합니다."
+    - "&7예: VILLAGER, COW, ARMOR_STAND 등"
+
   animation: "&8애니메이션 및 상태 선택"
   animation_spin: "&f회전 (SPIN)"
   animation_spin_lore: ["&7NPC를 회전 상태로 만듭니다."]
@@ -91,7 +106,6 @@ menu:
   animation_stop: "&4애니메이션 정지"
   animation_stop_lore: ["&7재생 중인 특정 상태를 중단합니다."]
 
-  # [수정] _name 접미사를 사용하여 예약어 충돌 방지
   toggle:
     title: "&8상태 선택 &8| &0{type}"
     on_name: "&a&lON"
@@ -122,6 +136,13 @@ menu:
 msg:
   input_name: "&e시네마틱 이름을 입력해주세요."
   input_spawn: "&eNPC 데이터를 입력하세요 (타입:ID:스킨)"
+  input_spawn_mm: "&e소환할 MythicMob의 키(Internal Name)를 입력하세요."
+  input_spawn_me: "&e소환할 ModelEngine의 모델 ID를 입력하세요."
+  input_spawn_npc_player: "&eNPC의 이름과 스킨을 입력하세요 (형식: 이름:스킨)"
+  input_spawn_npc_mob: "&eNPC의 이름을 입력하세요."
+  input_custom_type: "&b[!] 생성할 엔티티 타입을 입력하세요. (예: VILLAGER, ARMOR_STAND)"
+  input_custom_type_confirm: "&a[!] 확인된 타입: &f{type}"
+  error_invalid_type: "&c[!] 잘못된 엔티티 타입입니다. 다시 시도하거나 메뉴로 돌아가세요."
   input_sound: "&e사운드 노드를 입력하세요."
   input_particle: "&e파티클 이름을 입력하세요."
   input_title: "&e타이틀을 입력하세요 (제목;부제목)"

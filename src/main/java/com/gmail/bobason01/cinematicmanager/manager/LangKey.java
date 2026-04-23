@@ -4,14 +4,13 @@ public enum LangKey {
     // 시스템 공통
     PREFIX("prefix"),
 
-    // 메인 메뉴 관련
+    // 메뉴 관련
     MENU_MAIN("menu.main"),
     MENU_MAIN_LIST("menu.main_list"),
     MENU_MAIN_LIST_LORE("menu.main_list_lore"),
     MENU_MAIN_CREATE("menu.main_create"),
     MENU_MAIN_CREATE_LORE("menu.main_create_lore"),
 
-    // 컷신 목록 관련
     MENU_LIST("menu.list"),
     MENU_LIST_ID("menu.list_id"),
     MENU_LIST_EDIT_LORE("menu.list_edit_lore"),
@@ -20,7 +19,6 @@ public enum LangKey {
     MENU_LIST_BACK("menu.list_back"),
     MENU_LIST_NEXT("menu.list_next"),
 
-    // 스튜디오 GUI 관련
     MENU_STUDIO("menu.studio"),
     MENU_STUDIO_TIME("menu.studio_time"),
     MENU_STUDIO_CURRENT("menu.studio_current"),
@@ -43,7 +41,6 @@ public enum LangKey {
     MENU_STUDIO_STOP("menu.studio_stop"),
     MENU_STUDIO_NEXT("menu.studio_next"),
 
-    // 액션 선택 관련
     MENU_ACTION("menu.action"),
     MENU_ACTION_SPAWN("menu.action_spawn"),
     MENU_ACTION_SPAWN_LORE("menu.action_spawn_lore"),
@@ -57,7 +54,19 @@ public enum LangKey {
     MENU_ACTION_SHOW_LORE("menu.action_show_lore"),
     MENU_ACTION_BACK("menu.action_back"),
 
-    // 애니메이션 및 상태 제어 관련
+    MENU_SPAWN_TYPE("menu.spawn_type"),
+    MENU_SPAWN_TYPE_NPC("menu.spawn_type_npc"),
+    MENU_SPAWN_TYPE_MM("menu.spawn_type_mm"),
+    MENU_SPAWN_TYPE_ME("menu.spawn_type_me"),
+
+    MENU_NPC_TYPE("menu.npc_type"),
+    MENU_NPC_TYPE_PLAYER("menu.npc_type_player"),
+    MENU_NPC_TYPE_ZOMBIE("menu.npc_type_zombie"),
+    MENU_NPC_TYPE_PIG("menu.npc_type_pig"),
+    MENU_NPC_TYPE_SKELETON("menu.npc_type_skeleton"),
+    MENU_NPC_TYPE_CUSTOM("menu.npc_type_custom"),
+    MENU_NPC_TYPE_CUSTOM_LORE("menu.npc_type_custom_lore"),
+
     MENU_ANIMATION("menu.animation"),
     MENU_ANIMATION_SPIN("menu.animation_spin"),
     MENU_ANIMATION_SPIN_LORE("menu.animation_spin_lore"),
@@ -74,21 +83,18 @@ public enum LangKey {
     MENU_ANIMATION_STOP("menu.animation_stop"),
     MENU_ANIMATION_STOP_LORE("menu.animation_stop_lore"),
 
-    // 토글(ON/OFF) GUI 관련
     MENU_TOGGLE_TITLE("menu.toggle.title"),
     MENU_TOGGLE_ON_NAME("menu.toggle.on_name"),
     MENU_TOGGLE_ON_LORE("menu.toggle.on_lore"),
     MENU_TOGGLE_OFF_NAME("menu.toggle.off_name"),
     MENU_TOGGLE_OFF_LORE("menu.toggle.off_lore"),
 
-    // NPC 목록 관련
     MENU_NPC("menu.npc"),
     MENU_NPC_NAME("menu.npc_name"),
     MENU_NPC_SELECT_LORE("menu.npc_select_lore"),
     MENU_NPC_ID_LORE("menu.npc_id_lore"),
     MENU_NPC_BACK("menu.npc_back"),
 
-    // 이펙트 선택 관련
     MENU_EFFECT("menu.effect"),
     MENU_EFFECT_SOUND("menu.effect_sound"),
     MENU_EFFECT_SOUND_LORE("menu.effect_sound_lore"),
@@ -100,9 +106,16 @@ public enum LangKey {
     MENU_EFFECT_MESSAGE_LORE("menu.effect_message_lore"),
     MENU_EFFECT_BACK("menu.effect_back"),
 
-    // 메시지 및 피드백 관련
+    // 메시지 관련
     MSG_INPUT_NAME("msg.input_name"),
     MSG_INPUT_SPAWN("msg.input_spawn"),
+    MSG_INPUT_SPAWN_MM("msg.input_spawn_mm"),
+    MSG_INPUT_SPAWN_ME("msg.input_spawn_me"),
+    MSG_INPUT_SPAWN_NPC_PLAYER("msg.input_spawn_npc_player"),
+    MSG_INPUT_SPAWN_NPC_MOB("msg.input_spawn_npc_mob"),
+    MSG_INPUT_CUSTOM_TYPE("msg.input_custom_type"),
+    MSG_INPUT_CUSTOM_TYPE_CONFIRM("msg.input_custom_type_confirm"),
+    MSG_ERROR_INVALID_TYPE("msg.error_invalid_type"),
     MSG_INPUT_SOUND("msg.input_sound"),
     MSG_INPUT_PARTICLE("msg.input_particle"),
     MSG_INPUT_TITLE("msg.input_title"),
@@ -116,7 +129,6 @@ public enum LangKey {
     MSG_RECORD_START("msg.record_start"),
     MSG_RECORD_END("msg.record_end"),
 
-    // 채팅 버튼 관련
     BTN_CAMERA_STATIC("btn.camera_static"),
     BTN_CAMERA_RECORD("btn.camera_record");
 

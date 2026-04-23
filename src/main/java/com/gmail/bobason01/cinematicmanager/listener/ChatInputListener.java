@@ -4,8 +4,10 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
+import com.gmail.bobason01.cinematicmanager.manager.LangManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -26,11 +28,15 @@ public class ChatInputListener implements Listener {
     }
 
     public void startCreationInput(Player player) {
-        inputQueue.put(player, new InputContext("CREATE", null, 0, null));
+        inputQueue.put(player, new InputContext("CREATE", null, 0, null, ""));
     }
 
     public void startTrackInput(Player player, String id, String type, int tick) {
-        inputQueue.put(player, new InputContext(type, id, tick, player.getLocation().clone()));
+        startTrackInput(player, id, type, tick, "");
+    }
+
+    public void startTrackInput(Player player, String id, String type, int tick, String prefix) {
+        inputQueue.put(player, new InputContext(type, id, tick, player.getLocation().clone(), prefix));
     }
 
     @EventHandler
@@ -41,12 +47,27 @@ public class ChatInputListener implements Listener {
 
         event.setCancelled(true);
         final String message = event.getMessage();
+        LangManager lang = plugin.getLangManager();
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (context.type.equals("CREATE")) {
                 plugin.getDataManager().createCinematic(message);
-                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_CREATE_SUCCESS));
+                player.sendMessage(lang.getPrefixed(LangKey.MSG_CREATE_SUCCESS));
                 plugin.getGuiManager().openStudioGUI(player, message, 0);
+                return;
+            }
+
+            if (context.type.equals("CUSTOM_TYPE")) {
+                String typeStr = message.toUpperCase();
+                try {
+                    EntityType.valueOf(typeStr);
+                    player.sendMessage(lang.format(LangKey.MSG_INPUT_CUSTOM_TYPE_CONFIRM, "{type}", typeStr));
+                    player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_MOB));
+                    startTrackInput(player, context.id, "SPAWN", context.tick, context.prefix + typeStr + ":");
+                } catch (IllegalArgumentException e) {
+                    player.sendMessage(lang.getPrefixed(LangKey.MSG_ERROR_INVALID_TYPE));
+                    startTrackInput(player, context.id, "CUSTOM_TYPE", context.tick, context.prefix);
+                }
                 return;
             }
 
@@ -58,7 +79,10 @@ public class ChatInputListener implements Listener {
             String extra = null;
 
             switch (context.type) {
-                case "SPAWN" -> actionType = CinematicAction.ActionType.SPAWN_NPC;
+                case "SPAWN" -> {
+                    actionType = CinematicAction.ActionType.SPAWN_NPC;
+                    processedValue = context.prefix + message;
+                }
                 case "SOUND" -> actionType = CinematicAction.ActionType.SOUND;
                 case "PARTICLE" -> actionType = CinematicAction.ActionType.PARTICLE;
                 case "TITLE" -> actionType = CinematicAction.ActionType.TITLE;
@@ -82,7 +106,7 @@ public class ChatInputListener implements Listener {
                 CinematicAction action = new CinematicAction(actionType, processedValue, context.loc, extra);
                 data.addAction(context.tick, action);
                 plugin.getDataManager().saveCinematic(data);
-                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_SAVE_SUCCESS));
+                player.sendMessage(lang.getPrefixed(LangKey.MSG_SAVE_SUCCESS));
             }
 
             int targetPage = context.tick / 180;
@@ -103,12 +127,14 @@ public class ChatInputListener implements Listener {
         final String id;
         final int tick;
         final Location loc;
+        final String prefix;
 
-        InputContext(String type, String id, int tick, Location loc) {
+        InputContext(String type, String id, int tick, Location loc, String prefix) {
             this.type = type;
             this.id = id;
             this.tick = tick;
             this.loc = loc;
+            this.prefix = prefix;
         }
     }
 }

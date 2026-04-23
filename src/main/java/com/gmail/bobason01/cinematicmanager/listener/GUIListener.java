@@ -46,6 +46,10 @@ public class GUIListener implements Listener {
             event.setCancelled(true); handleStudio(player, event.getSlot(), item, event.getClick().isRightClick());
         } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_ACTION)))) {
             event.setCancelled(true); handleAction(player, event.getSlot());
+        } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_SPAWN_TYPE)))) {
+            event.setCancelled(true); handleSpawnType(player, event.getSlot());
+        } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_NPC_TYPE)))) {
+            event.setCancelled(true); handleNPCType(player, event.getSlot());
         } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_ANIMATION)))) {
             event.setCancelled(true); handleAnimation(player, event.getSlot());
         } else if (title.startsWith(lang.sanitize(lang.get(LangKey.MENU_TOGGLE_TITLE).split("\\{")[0]))) {
@@ -116,13 +120,68 @@ public class GUIListener implements Listener {
         int t = getMetaInt(player, "edit_tick");
         int p = getMetaInt(player, "edit_page");
         switch (slot) {
-            case 9 -> { player.closeInventory(); player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_SPAWN)); plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t); }
+            case 9 -> plugin.getGuiManager().openSpawnTypeGUI(player, id, t, p);
             case 11 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "MOVE")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "MOVE"); }
             case 13 -> plugin.getGuiManager().openAnimationSelectGUI(player, id, t, p);
             case 15 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "HIDE")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "HIDE"); }
             case 17 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "SHOW")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "SHOW"); }
             case 22 -> plugin.getGuiManager().openStudioGUI(player, id, p);
         }
+    }
+
+    private void handleSpawnType(Player player, int slot) {
+        String id = getMeta(player, "edit_id");
+        int t = getMetaInt(player, "edit_tick");
+        int p = getMetaInt(player, "edit_page");
+        LangManager lang = plugin.getLangManager();
+
+        if (slot == 11) {
+            plugin.getGuiManager().openNPCTypeGUI(player, id, t, p);
+        } else if (slot == 13) {
+            player.closeInventory();
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_MM));
+            plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "mythicmobs:");
+        } else if (slot == 15) {
+            player.closeInventory();
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_ME));
+            plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "modelengine:");
+        } else if (slot == 22) {
+            plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
+        }
+    }
+
+    private void handleNPCType(Player player, int slot) {
+        String id = getMeta(player, "edit_id");
+        int t = getMetaInt(player, "edit_tick");
+        int p = getMetaInt(player, "edit_page");
+        LangManager lang = plugin.getLangManager();
+
+        if (slot == 22) {
+            plugin.getGuiManager().openSpawnTypeGUI(player, id, t, p);
+            return;
+        }
+
+        if (slot == 16) {
+            player.closeInventory();
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CUSTOM_TYPE));
+            plugin.getChatInputListener().startTrackInput(player, id, "CUSTOM_TYPE", t, "npc:");
+            return;
+        }
+
+        String type = "";
+        if (slot == 10) type = "PLAYER";
+        else if (slot == 11) type = "ZOMBIE";
+        else if (slot == 12) type = "PIG";
+        else if (slot == 13) type = "SKELETON";
+        else return;
+
+        player.closeInventory();
+        if (type.equals("PLAYER")) {
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_PLAYER));
+        } else {
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_MOB));
+        }
+        plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "npc:" + type + ":");
     }
 
     private void handleAnimation(Player player, int slot) {
@@ -135,7 +194,6 @@ public class GUIListener implements Listener {
             case 12 -> plugin.getGuiManager().openToggleGUI(player, "SWIM");
             case 13 -> plugin.getGuiManager().openToggleGUI(player, "SNEAK");
             case 14 -> plugin.getGuiManager().openToggleGUI(player, "SLEEP");
-            // 수정 포인트: 바로 채팅 입력을 받지 않고 타겟 NPC 선택 GUI를 먼저 엶
             case 20 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STATE");
             case 24 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STOP");
             case 31 -> plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
@@ -167,7 +225,6 @@ public class GUIListener implements Listener {
             player.closeInventory();
             new BukkitRunnable() { @Override public void run() { new RecordSession(plugin, player, id, t, CinematicAction.ActionType.MOVE_NPC, target).start(); } }.runTask(plugin);
         } else if (mode.equals("STATE") || mode.equals("STOP")) {
-            // 수정 포인트: NPC 선택 완료 후 메타데이터에 타겟 저장 및 채팅 입력 시작
             player.closeInventory();
             player.setMetadata("edit_npc_target", new FixedMetadataValue(plugin, target));
             if (mode.equals("STATE")) {

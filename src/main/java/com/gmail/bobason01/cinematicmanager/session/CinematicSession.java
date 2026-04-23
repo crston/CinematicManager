@@ -28,7 +28,6 @@ public class CinematicSession {
     private int currentTick = 0;
     private int maxTick = 0;
 
-    // 키 관리: PAPI 치환 전의 원본 ID를 키로 사용합니다.
     private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
     private final Map<String, Location> spawnLocations = new ConcurrentHashMap<>();
     private final Map<String, ActivePath> movingNpcs = new ConcurrentHashMap<>();
@@ -49,14 +48,10 @@ public class CinematicSession {
         this(plugin, player, plugin.getConfigManager().getCinematic(id));
     }
 
-    /**
-     * ID 비교를 위한 정규화 메서드.
-     * PAPI 치환은 하지 않고, 공백 및 색상코드 등만 제거하여 원본 비교의 정확도를 높입니다.
-     */
     private String sanitize(String id) {
         if (id == null) return "";
         String clean = ChatColor.stripColor(id);
-        if (clean.contains("»")) clean = clean.split("»")[1];
+        if (clean.contains(">>")) clean = clean.split(">>")[1];
         else if (clean.contains("|")) clean = clean.split("\\|")[1];
         return clean.replace("[ID:", "").replace("[", "").replace("]", "").trim().toLowerCase();
     }
@@ -103,24 +98,21 @@ public class CinematicSession {
             }
 
             Location rel = path.relativeLocations.get(elapsed);
+            // 기록된 상대 좌표를 NPC의 스폰 좌표(baseOrigin)에 더해 위치 복원
             Location finalLoc = path.baseOrigin.clone().add(rel.getX(), rel.getY(), rel.getZ());
             finalLoc.setYaw(rel.getYaw());
             finalLoc.setPitch(rel.getPitch());
+
             plugin.getNpcManager().move(player, entity, finalLoc);
         }
     }
 
-    /**
-     * 엔티티 검색: 원본 데이터의 키를 기준으로 찾습니다.
-     */
     private Entity findEntity(String key) {
         if (key == null) return null;
         String searchKey = sanitize(key);
 
-        // 원본 키 직접 매칭
         if (activeEntities.containsKey(searchKey)) return activeEntities.get(searchKey);
 
-        // 유사 키 매칭
         for (Map.Entry<String, Entity> entry : activeEntities.entrySet()) {
             if (entry.getKey().contains(searchKey) || searchKey.contains(entry.getKey())) {
                 return entry.getValue();
@@ -142,7 +134,6 @@ public class CinematicSession {
             case HIDE_ENTITY -> handleHide(action);
             case SHOW_ENTITY -> handleShow(action);
             case ANIMATION -> {
-                // extra(대상 ID) 원본을 그대로 사용하여 엔티티를 찾음
                 Entity e = findEntity(action.getExtra());
                 if (e != null) {
                     String animValue = action.getValue();
@@ -153,12 +144,20 @@ public class CinematicSession {
         }
     }
 
+    private boolean isEntityType(String str) {
+        if (str.equalsIgnoreCase("PLAYER")) return true;
+        try {
+            org.bukkit.entity.EntityType.valueOf(str.toUpperCase());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void handleSpawn(CinematicAction action) {
         String rawValue = action.getValue();
-        // 키는 변수를 포함한 원본(예: npc:%player_name%)을 정규화하여 사용
         String cleanKey = sanitize(rawValue);
 
-        // 실제 스폰할 때만 PAPI 치환 적용
         String spawnName = rawValue;
         if (hasPapi) spawnName = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, spawnName);
 
@@ -169,7 +168,18 @@ public class CinematicSession {
         if (lowerSpawn.contains("npc:")) {
             String val = spawnName.substring(lowerSpawn.indexOf("npc:") + 4);
             String[] split = val.split(":");
-            npc = plugin.getNpcManager().spawnNPC(player, loc, split[0], split.length > 1 ? split[1] : split[0]);
+
+            String type = "PLAYER";
+            String name = split[0];
+            String skin = split.length > 1 ? split[1] : split[0];
+
+            if (split.length >= 2 && isEntityType(split[0])) {
+                type = split[0];
+                name = split[1];
+                skin = split.length > 2 ? split[2] : name;
+            }
+
+            npc = plugin.getNpcManager().spawnNPC(player, loc, type, name, skin);
         } else if (lowerSpawn.contains("mythicmobs:")) {
             npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(lowerSpawn.indexOf("mythicmobs:") + 11).trim(), loc);
         } else if (lowerSpawn.contains("modelengine:")) {
@@ -186,6 +196,7 @@ public class CinematicSession {
         String targetKey = sanitize(action.getExtra());
         List<Location> relativePath = data.getPathRecord(action.getValue());
 
+        // 소환된 위치를 기준점으로 삼아 이동을 시작함
         Location origin = spawnLocations.get(targetKey);
         if (origin == null) {
             for (Map.Entry<String, Location> entry : spawnLocations.entrySet()) {
