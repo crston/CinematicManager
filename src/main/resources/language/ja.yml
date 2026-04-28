@@ -1,0 +1,175 @@
+prefix: "&6&lCinematic &8| &f"
+
+menu:
+  main: "&8シネマティック・コントローラー"
+  main_list: "&e&lマイ演出リスト"
+  main_list_lore:
+    - ""
+    - "&7作成済みのプロジェクトを読み込んで"
+    - "&7編集や管理を行うことができます。"
+  main_create: "&a&l新規シナリオ作成"
+  main_create_lore:
+    - ""
+    - "&7新しい背景とストーリーで"
+    - "&7演出プロジェクトを開始します。"
+
+  list: "&8プロジェクト一覧"
+  list_id: "&fID &8» &b{id}"
+  list_edit_lore:
+    - ""
+    - "&e左クリック &8» &f編集スタジオへ"
+  list_delete_lore:
+    - "&c右クリック &8» &fこのプロジェクトを削除"
+  list_prev: "&e◀ 前のページ"
+  list_back: "&7◀ メインメニューへ"
+  list_next: "&e次のページ ▶"
+
+  studio: "&8スタジオ &8| &0{id}"
+  studio_time: "&6&l進行時間 &8» &e{tick} Ticks"
+  studio_current: "&f&l現在のタイムライン情報"
+  studio_add_action: "&a&l+ &fNPCアクション配置"
+  studio_add_action_lore:
+    - "&7NPCを召喚・移動させたり"
+    - "&7特定の動作を指示したりします。"
+  studio_action_name: "&bアクション &8» &f{type}"
+  studio_action_target: "&3対象 &8» &f{target}"
+  studio_add_camera: "&6&l+ &fカメラアングル設定"
+  studio_add_camera_lore:
+    - "&7視点を固定するか、カメラの"
+    - "&7移動経路を指定します。"
+  studio_camera_name: "&6カメラ &8» &f{type}"
+  studio_add_effect: "&d&l+ &f演出エフェクト追加"
+  studio_add_effect_lore:
+    - "&7タイトル、効果音、パーティクルなど"
+    - "&7劇的な効果を加えます。"
+  studio_effect_name: "&d効果 &8» &f{type}"
+  studio_effect_value: "&7値 &8» &f{value}"
+  studio_delete_lore:
+    - ""
+    - "&c右クリック &8» &fこのアクションを削除"
+  studio_prev: "&e◀ 前のティック"
+  studio_back: "&7◀ スタジオを閉じる"
+  studio_play: "&a&l▶ &2プレビュー再生"
+  studio_save: "&b&l💾 &3これまでの作業を保存"
+  studio_stop: "&c&l⏹ &4再生停止"
+  studio_next: "&e次のティック ▶"
+
+  action: "&8実行するアクションを選択"
+  action_spawn: "&aNPCを召喚"
+  action_spawn_lore:
+    - "&7カスタムNPCやMythicMobsを"
+    - "&7現在地に配置します。"
+  action_move: "&e移動経路を記録"
+  action_move_lore:
+    - "&7自分の動きに合わせて"
+    - "&7NPCの移動経路を記録します。"
+  action_animation: "&6詳細動作の設定"
+  action_animation_lore:
+    - "&7特殊な行動やアニメーション、"
+    - "&7状態値を調節します。"
+  action_hide: "&cNPCを非表示"
+  action_hide_lore:
+    - "&7対象を画面から隠します。"
+  action_show: "&bNPCを再表示"
+  action_show_lore:
+    - "&7隠されたNPCを再び表示させます。"
+  action_back: "&7戻る"
+
+  spawn_type: "&8召喚するエンティティを選択"
+  spawn_type_npc: "&e&lカスタムNPC"
+  spawn_type_mm: "&6&lMythicMobs"
+  spawn_type_me: "&b&lModelEngine"
+
+  npc_type: "&8NPCの形態を選択"
+  npc_type_player: "&f&l人間 (Player)"
+  npc_type_zombie: "&2&lゾンビ"
+  npc_type_pig: "&d&l豚"
+  npc_type_skeleton: "&7&lスケルトン"
+  npc_type_custom: "&b&l直接名前を入力"
+  npc_type_custom_lore:
+    - "&7エンティティの種類を入力します。"
+    - "&7例: VILLAGER, COW, BLAZE"
+
+  animation: "&8動作を選択"
+  animation_spin: "&f回転する"
+  animation_spin_lore: ["&7対象をその場で回転させます。"]
+  animation_sprint: "&f全力疾走"
+  animation_sprint_lore: ["&7対象を走る状態に設定します。"]
+  animation_swim: "&f泳ぐ"
+  animation_swim_lore: ["&7対象を泳ぐ状態に設定します。"]
+  animation_sneak: "&fスニーク"
+  animation_sneak_lore: ["&7対象を身を低くした状態に設定します。"]
+  animation_sleep: "&f寝る/横たわる"
+  animation_sleep_lore: ["&7対象を横になった状態に設定します。"]
+  animation_custom: "&bモデルエンジン専用動作"
+  animation_custom_lore: ["&7指定のアニメーションコードを入力してください。"]
+  animation_stop: "&4動作停止"
+  animation_stop_lore: ["&7現在の特殊状態を解除します。"]
+
+  toggle:
+    title: "&8状態切替 &8| &0{type}"
+    on_name: "&a&l有効 (ON)"
+    on_lore: ["&7この状態をすぐに適用します。"]
+    off_name: "&c&l無効 (OFF)"
+    off_lore: ["&7この状態を解除します。"]
+
+  npc: "&8指示を送るNPCを選択"
+  npc_name: "&f対象 &8» &b{name}"
+  npc_select_lore:
+    - ""
+    - "&eクリック &8» &fこの個体を選択"
+  npc_id_lore:
+    - "&8固有識別子 &8» &7{id}"
+  npc_back: "&7戻る"
+
+  effect_sound: "&f効果音再生"
+  effect_sound_lore: ["&7サウンドのパスを入力してください。"]
+  effect_particle: "&fパーティクル演出"
+  effect_particle_lore: ["&7パーティクル名を入力してください。"]
+  effect_title: "&fタイトル演出"
+  effect_title_lore: ["&7形式: メインタイトル;サブタイトル"]
+  effect_message: "&fチャットメッセージ"
+  effect_message_lore: ["&7メッセージを入力してください。"]
+  effect_command: "&d&lコマンド実行"
+  effect_command_lore:
+    - "&7ターゲットにコマンドを実行します。"
+    - "&7#を付けるとコンソールから実行します。"
+    - "&7置換: %player%"
+  effect_lightning: "&e&l演出用雷召喚"
+  effect_lightning_lore:
+    - "&7現在地に演出用の雷を"
+    - "&7召喚します。"
+  effect_back: "&7戻る"
+
+msg:
+  input_name: "&e新規プロジェクトの名前を入力してください。"
+  input_spawn: "&eNPC情報を入力してください (タイプ:ID:スキン)"
+  input_spawn_mm: "&e召喚する MythicMob のIDを入力してください。"
+  input_spawn_me: "&e召喚する ModelEngine のモデルコードを入力してください。"
+  input_spawn_npc_player: "&e名前とスキンを入力してください (名前:スキン)"
+  input_spawn_npc_mob: "&eNPCの名前を入力してください。"
+  input_custom_type: "&b[!] エンティティの種類を入力してください (例: VILLAGER, COW)"
+  input_custom_type_confirm: "&a[!] 認識された種類: &f{type}"
+  error_invalid_type: "&c[!] エンティティ名が無効です。もう一度確認してください。"
+  input_sound: "&e再生するサウンド名を入力してください。"
+  input_particle: "&e表示するパーティクル名を入力してください。"
+  input_title: "&eタイトルを入力してください (メイン;サブ)"
+  input_message: "&eメッセージを入力してください。"
+  input_command: "&e実行するコマンドを入力してください (#はコンソール実行)"
+  input_animation: "&e実行する動作コードを入力してください。"
+  input_anim_stop: "&e停止する動作コードを入力してください。"
+  create_success: "&aプロジェクトが正常に作成されました！"
+  save_success: "&a変更内容が保存されました。"
+  delete_admin: "&c管理者権限が不足しています。"
+  camera_static_set: "&6現在の位置に視点が固定されました。"
+  record_start: "&c&l● &f録画中... &7(SHIFTキーで完了)"
+  record_end: "&a&l✔ &f録画が完了しました！"
+  lightning_added: "&e現在の位置に演出用の雷が追加されました。"
+  pause_title: "&e&l視線を回すか移動して&f 続行"
+  pause_subtitle: "&e[!] 演出停止中 &8| &f移動: 続行, Shift: スキップ"
+  pause_resume: "&a&l▶ &f動きを感知しました。演出を再開します。"
+  pause_skip: "&c&l⏹ &fシネマティックをスキップしました。"
+
+btn:
+  camera_static: "&6&l現在の位置で視点固定"
+  camera_record: "&c&l移動経路の録画開始"

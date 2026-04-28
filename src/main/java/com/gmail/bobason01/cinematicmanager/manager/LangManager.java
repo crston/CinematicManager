@@ -2,7 +2,6 @@ package com.gmail.bobason01.cinematicmanager.manager;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import org.bukkit.ChatColor;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -26,15 +25,22 @@ public class LangManager {
 
     public void load() {
         langCache.clear();
-        String langType = plugin.getConfig().getString("language", "ko");
+        String langType = plugin.getConfig().getString("language", "en");
         String fileName = langType + ".yml";
-        File langFile = new File(plugin.getDataFolder(), "language" + File.separator + fileName);
 
-        // 1. 내부 리소스(jar 파일 안)에서 기본 파일 로드 (누락된 키 대조용)
+        File langFolder = new File(plugin.getDataFolder(), "language");
+        if (!langFolder.exists()) langFolder.mkdirs();
+
+        File langFile = new File(langFolder, fileName);
+
+        // 1. 내부 리소스 로드 (기본값 비교용)
         YamlConfiguration defaultConfig = null;
-        InputStream defStream = plugin.getResource("language/" + fileName);
-        if (defStream != null) {
-            defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defStream, StandardCharsets.UTF_8));
+        try (InputStream defStream = plugin.getResource("language/" + fileName)) {
+            if (defStream != null) {
+                defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defStream, StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Could not find default language resource: " + fileName);
         }
 
         // 2. 파일이 없으면 생성
@@ -45,46 +51,52 @@ public class LangManager {
         // 3. 현재 파일 로드
         YamlConfiguration config = YamlConfiguration.loadConfiguration(langFile);
 
-        // 4. 자동 업데이트 로직: 내부 리소스에는 있는데 현재 파일에는 없는 키가 있다면 추가
+        // 4. 자동 업데이트 로직 (누락된 키 자동 추가)
         if (defaultConfig != null) {
             boolean changed = false;
             for (String key : defaultConfig.getKeys(true)) {
-                if (!config.contains(key)) {
+                // 섹션이 아닌 실제 데이터 포인트만 체크
+                if (!defaultConfig.isConfigurationSection(key) && !config.contains(key)) {
                     config.set(key, defaultConfig.get(key));
                     changed = true;
                 }
             }
-            // 변경 사항이 있다면 파일에 다시 저장 (주석은 유지되지 않으니 주의)
             if (changed) {
                 try {
                     config.save(langFile);
                     plugin.getLogger().info("Updated " + fileName + " with missing language keys.");
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    plugin.getLogger().severe("Could not save updated language file: " + e.getMessage());
                 }
             }
         }
 
-        // 5. 캐시 갱신
+        // 5. 캐시 갱신 (이미지의 MemorySection 방지 로직 포함)
         this.prefix = color(config.getString("prefix", "&6&lCinematic &8| &f"));
 
         for (LangKey key : LangKey.values()) {
             if (key == LangKey.PREFIX) continue;
             String path = key.getPath();
 
+            // 리스트 형태(Lore 등) 처리
             if (config.isList(path)) {
                 langCache.put(key, config.getStringList(path).stream()
                         .map(this::color)
                         .collect(Collectors.joining("\n")));
-            } else {
-                String val = config.getString(path);
-                langCache.put(key, val != null ? color(val) : "§cMissing: " + path);
+            }
+            // 문자열 형태 처리
+            else if (config.isString(path)) {
+                langCache.put(key, color(config.getString(path)));
+            }
+            // 경로가 없거나 섹션일 경우 (MemorySection 출력 방지)
+            else {
+                langCache.put(key, "§c[Missing: " + path + "]");
             }
         }
     }
 
     public String get(LangKey key) {
-        return langCache.getOrDefault(key, "§cMissing: " + key.name());
+        return langCache.getOrDefault(key, "§c[Error: " + key.name() + "]");
     }
 
     public String getPrefixed(LangKey key) {
@@ -94,16 +106,24 @@ public class LangManager {
     public String format(LangKey key, String... replacements) {
         String msg = get(key);
         for (int i = 0; i < replacements.length; i += 2) {
-            if (i + 1 < replacements.length) msg = msg.replace(replacements[i], replacements[i + 1]);
+            if (i + 1 < replacements.length && replacements[i] != null && replacements[i+1] != null) {
+                msg = msg.replace(replacements[i], replacements[i + 1]);
+            }
         }
         return msg;
     }
 
+    /**
+     * GUI 타이틀이나 아이템 이름을 위해 색상 코드를 제거한 순수 텍스트 반환
+     */
     public String sanitize(String text) {
-        return text == null ? "" : ChatColor.stripColor(text).trim();
+        if (text == null) return "";
+        // 앰퍼샌드(&)를 섹션 기호(§)로 바꾼 후, 모든 색상 코드를 제거
+        return ChatColor.stripColor(color(text)).trim();
     }
 
     private String color(String s) {
-        return s == null ? "" : ChatColor.translateAlternateColorCodes('&', s);
+        if (s == null) return "";
+        return ChatColor.translateAlternateColorCodes('&', s);
     }
 }

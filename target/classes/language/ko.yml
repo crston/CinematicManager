@@ -1,161 +1,175 @@
 prefix: "&6&lCinematic &8| &f"
 
 menu:
-  main: "&8시네마틱 매니저"
-  main_list: "&e&l시네마틱 목록"
+  main: "&8시네마틱 컨트롤러"
+  main_list: "&e&l내 연출 목록"
   main_list_lore:
     - ""
-    - "&7저장된 연출 프로젝트를 확인하고"
-    - "&7편집하거나 관리합니다."
-  main_create: "&a&l새 프로젝트 생성"
+    - "&7제작된 프로젝트를 불러와서"
+    - "&7편집하거나 관리할 수 있습니다."
+  main_create: "&a&l새 시나리오 만들기"
   main_create_lore:
     - ""
-    - "&7새로운 시네마틱 프로젝트를"
-    - "&7시작합니다."
+    - "&7새로운 배경과 흐름으로"
+    - "&7연출 프로젝트를 시작합니다."
 
-  list: "&8시네마틱 목록"
-  list_id: "&f아이디 &8» &b{id}"
+  list: "&8연출 프로젝트 목록"
+  list_id: "&fID &8» &b{id}"
   list_edit_lore:
     - ""
-    - "&e좌클릭 &8» &f스튜디오 입장"
+    - "&e좌클릭 &8» &f편집 스튜디오 입장"
   list_delete_lore:
-    - "&c우클릭 &8» &f프로젝트 삭제"
+    - "&c우클릭 &8» &f이 프로젝트 삭제"
   list_prev: "&e◀ 이전 페이지"
-  list_back: "&7◀ 메뉴로 돌아가기"
+  list_back: "&7◀ 메인 메뉴로"
   list_next: "&e다음 페이지 ▶"
 
   studio: "&8스튜디오 &8| &0{id}"
-  studio_time: "&6&l시간 &8» &e{tick} 틱"
-  studio_current: "&f&l타임라인 정보"
-  studio_add_action: "&a&l+ &fNPC 액션 추가"
+  studio_time: "&6&l진행 시간 &8» &e{tick} 틱"
+  studio_current: "&f&l현재 타임라인 정보"
+  studio_add_action: "&a&l+ &fNPC 액션 배치"
   studio_add_action_lore:
-    - "&7스폰, 이동, 애니메이션, 숨기기 등"
-    - "&7NPC 연출을 추가합니다."
+    - "&7NPC를 소환하고 이동시키거나"
+    - "&7특정 동작을 지시합니다."
   studio_action_name: "&b액션 &8» &f{type}"
   studio_action_target: "&3대상 &8» &f{target}"
-  studio_add_camera: "&6&l+ &f카메라 설정"
+  studio_add_camera: "&6&l+ &f카메라 앵글 설정"
   studio_add_camera_lore:
-    - "&7고정 카메라 또는 녹화된"
-    - "&7카메라 경로를 설정합니다."
+    - "&7시선을 고정하거나 카메라가"
+    - "&7움직일 경로를 지정합니다."
   studio_camera_name: "&6카메라 &8» &f{type}"
-  studio_add_effect: "&d&l+ &f이펙트 추가"
+  studio_add_effect: "&d&l+ &f연출 효과 추가"
   studio_add_effect_lore:
-    - "&7사운드, 파티클, 타이틀 등의"
-    - "&7특수 효과를 추가합니다."
-  studio_effect_name: "&d이펙트 &8» &f{type}"
+    - "&7화면 타이틀, 효과음, 파티클 등"
+    - "&7극적인 효과를 가미합니다."
+  studio_effect_name: "&d효과 &8» &f{type}"
   studio_effect_value: "&7값 &8» &f{value}"
   studio_delete_lore:
     - ""
-    - "&c우클릭 &8» &f액션 제거"
+    - "&c우클릭 &8» &f이 액션 제거"
   studio_prev: "&e◀ 이전 틱"
-  studio_back: "&7◀ 편집 종료"
-  studio_play: "&a&l▶ &2시네마틱 프리뷰"
-  studio_save: "&b&l💾 &3진행 상황 저장"
-  studio_stop: "&c&l⏹ &4프리뷰 정지"
+  studio_back: "&7◀ 스튜디오 나가기"
+  studio_play: "&a&l▶ &2시네마틱 미리보기"
+  studio_save: "&b&l💾 &3지금까지의 작업 저장"
+  studio_stop: "&c&l⏹ &4재생 중단"
   studio_next: "&e다음 틱 ▶"
 
-  action: "&8액션 선택"
-  action_spawn: "&aNPC 소환"
+  action: "&8수행할 액션 선택"
+  action_spawn: "&aNPC 소환하기"
   action_spawn_lore:
-    - "&7NPC, 신화몹, 모델엔진을"
-    - "&7해당 위치에 소환합니다."
-  action_move: "&e이동 녹화"
+    - "&7커스텀 NPC, 신화 몹 등을"
+    - "&7현 위치에 배치합니다."
+  action_move: "&e이동 경로 녹화"
   action_move_lore:
-    - "&7NPC의 움직임을 직접"
-    - "&7조종하여 녹화합니다."
-  action_animation: "&6애니메이션 설정"
+    - "&7내가 직접 움직이는 대로"
+    - "&7NPC의 경로를 기록합니다."
+  action_animation: "&6상세 동작 설정"
   action_animation_lore:
-    - "&7동작, 크기 조절, 상태 제어 등"
-    - "&7NPC의 상세 상태를 설정합니다."
-  action_hide: "&cNPC 숨기기"
+    - "&7특수한 행동이나 애니메이션,"
+    - "&7상태 값을 조절합니다."
+  action_hide: "&cNPC 일시 퇴장"
   action_hide_lore:
-    - "&7대상 NPC를 투명하게 만듭니다."
-  action_show: "&bNPC 보이기"
+    - "&7대상을 화면에서 보이지 않게 처리합니다."
+  action_show: "&bNPC 재입장"
   action_show_lore:
-    - "&7숨겨진 NPC를 다시 보여줍니다."
-  action_back: "&7뒤로가기"
+    - "&7숨겨진 NPC를 다시 화면에 나타냅니다."
+  action_back: "&7이전으로"
 
-  spawn_type: "&8스폰 방식 선택"
-  spawn_type_npc: "&e&l일반 NPC"
-  spawn_type_mm: "&6&lMythicMobs"
-  spawn_type_me: "&b&lModelEngine"
+  spawn_type: "&8어떤 개체를 소환할까요?"
+  spawn_type_npc: "&e&l커스텀 NPC"
+  spawn_type_mm: "&6&lMythicMobs (신화 몹)"
+  spawn_type_me: "&b&lModelEngine (커스텀 모델)"
 
-  npc_type: "&8NPC 타입 선택"
-  npc_type_player: "&f&l플레이어 (Player)"
+  npc_type: "&8NPC의 형태를 골라주세요"
+  npc_type_player: "&f&l사람 (Player)"
   npc_type_zombie: "&2&l좀비 (Zombie)"
   npc_type_pig: "&d&l돼지 (Pig)"
   npc_type_skeleton: "&7&l스켈레톤 (Skeleton)"
-  npc_type_custom: "&b&l직접 타입 입력"
+  npc_type_custom: "&b&l직접 이름 입력"
   npc_type_custom_lore:
-    - "&7엔티티 이름을 채팅으로 직접 입력합니다."
-    - "&7예: VILLAGER, COW, ARMOR_STAND 등"
+    - "&7엔티티의 영문 이름을 직접 입력합니다."
+    - "&7예: VILLAGER, COW, BLAZE 등"
 
-  animation: "&8애니메이션 및 상태 선택"
-  animation_spin: "&f회전 (SPIN)"
-  animation_spin_lore: ["&7NPC를 회전 상태로 만듭니다."]
-  animation_sprint: "&f달리기 (SPRINT)"
-  animation_sprint_lore: ["&7NPC를 달리는 상태로 만듭니다."]
-  animation_swim: "&f수영 (SWIM)"
-  animation_swim_lore: ["&7NPC를 수영하는 상태로 만듭니다."]
-  animation_sneak: "&f웅크리기 (SNEAK)"
-  animation_sneak_lore: ["&7NPC를 웅크린 상태로 만듭니다."]
-  animation_sleep: "&f눕기 (SLEEP)"
-  animation_sleep_lore: ["&7NPC를 누운 상태로 만듭니다."]
-  animation_custom: "&b모델엔진 스테이트"
-  animation_custom_lore: ["&7재생할 애니메이션 이름을 입력합니다."]
-  animation_stop: "&4애니메이션 정지"
-  animation_stop_lore: ["&7재생 중인 특정 상태를 중단합니다."]
+  animation: "&8수행할 동작 선택"
+  animation_spin: "&f빙글빙글 회전"
+  animation_spin_lore: ["&7대상을 제자리에서 돌게 합니다."]
+  animation_sprint: "&f전력 질주"
+  animation_sprint_lore: ["&7대상을 달리는 상태로 설정합니다."]
+  animation_swim: "&f수영하기"
+  animation_swim_lore: ["&7대상을 수영 중인 상태로 설정합니다."]
+  animation_sneak: "&f웅크리기"
+  animation_sneak_lore: ["&7대상을 몸을 낮춘 상태로 설정합니다."]
+  animation_sleep: "&f잠자기/눕기"
+  animation_sleep_lore: ["&7대상을 누워 있는 상태로 설정합니다."]
+  animation_custom: "&b모델엔진 전용 애니메이션"
+  animation_custom_lore: ["&7지정한 애니메이션 코드를 직접 입력합니다."]
+  animation_stop: "&4동작 중단"
+  animation_stop_lore: ["&7현재 수행 중인 특정 상태를 멈춥니다."]
 
   toggle:
-    title: "&8상태 선택 &8| &0{type}"
-    on_name: "&a&lON"
-    on_lore: ["&7해당 상태를 활성화합니다."]
-    off_name: "&c&lOFF"
-    off_lore: ["&7해당 상태를 비활성화합니다."]
+    title: "&8상태 전환 &8| &0{type}"
+    on_name: "&a&l활성화 (ON)"
+    on_lore: ["&7해당 상태를 즉시 적용합니다."]
+    off_name: "&c&l비활성화 (OFF)"
+    off_lore: ["&7해당 상태를 제거합니다."]
 
-  npc: "&8대상 NPC 선택"
-  npc_name: "&fNPC &8» &b{name}"
+  npc: "&8명령을 내릴 NPC 선택"
+  npc_name: "&f대상 &8» &b{name}"
   npc_select_lore:
     - ""
-    - "&e클릭 &8» &f이 NPC를 선택"
+    - "&e클릭 &8» &f이 개체 선택"
   npc_id_lore:
-    - "&8식별자 &8» &7{id}"
-  npc_back: "&7뒤로가기"
+    - "&8고유 식별자 &8» &7{id}"
+  npc_back: "&7이전으로"
 
-  effect: "&8이펙트 선택"
-  effect_sound: "&f사운드 재생"
-  effect_sound_lore: ["&7재생할 사운드 노드 입력"]
-  effect_particle: "&f파티클 생성"
-  effect_particle_lore: ["&7생성할 파티클 이름 입력"]
-  effect_title: "&f타이틀 표시"
-  effect_title_lore: ["&7형식: 제목;부제목"]
-  effect_message: "&f메시지 전송"
-  effect_message_lore: ["&7채팅창 출력 메시지 입력"]
-  effect_back: "&7뒤로가기"
+  effect_sound: "&f효과음 재생"
+  effect_sound_lore: ["&7사운드 노드를 채팅창에 입력하세요."]
+  effect_particle: "&f파티클 연출"
+  effect_particle_lore: ["&7파티클 이름을 채팅창에 입력하세요."]
+  effect_title: "&f텍스트 효과 (타이틀)"
+  effect_title_lore: ["&7형식: 큰제목;작은제목"]
+  effect_message: "&f채팅 메시지 알림"
+  effect_message_lore: ["&7시청자에게 보낼 문구를 입력하세요."]
+  effect_command: "&d&l커맨드 실행 (명령어)"
+  effect_command_lore:
+    - "&7시청자를 대상으로 명령어를 실행합니다."
+    - "&7앞에 #을 붙이면 콘솔에서 실행합니다."
+    - "&7치환자: %player%"
+  effect_lightning: "&e&l연출용 번개 소환"
+  effect_lightning_lore:
+    - "&7다른 유저는 볼 수 없는"
+    - "&7개인 연출용 번개를 현재 위치에 소환합니다."
+  effect_back: "&7이전으로"
 
 msg:
-  input_name: "&e시네마틱 이름을 입력해주세요."
-  input_spawn: "&eNPC 데이터를 입력하세요 (타입:ID:스킨)"
-  input_spawn_mm: "&e소환할 MythicMob의 키(Internal Name)를 입력하세요."
-  input_spawn_me: "&e소환할 ModelEngine의 모델 ID를 입력하세요."
-  input_spawn_npc_player: "&eNPC의 이름과 스킨을 입력하세요 (형식: 이름:스킨)"
-  input_spawn_npc_mob: "&eNPC의 이름을 입력하세요."
-  input_custom_type: "&b[!] 생성할 엔티티 타입을 입력하세요. (예: VILLAGER, ARMOR_STAND)"
-  input_custom_type_confirm: "&a[!] 확인된 타입: &f{type}"
-  error_invalid_type: "&c[!] 잘못된 엔티티 타입입니다. 다시 시도하거나 메뉴로 돌아가세요."
-  input_sound: "&e사운드 노드를 입력하세요."
-  input_particle: "&e파티클 이름을 입력하세요."
-  input_title: "&e타이틀을 입력하세요 (제목;부제목)"
-  input_message: "&e메시지 내용을 입력하세요."
-  input_animation: "&e실행할 애니메이션 이름을 입력하세요."
-  input_anim_stop: "&e중단할 애니메이션 이름을 입력하세요."
-  create_success: "&a프로젝트가 생성되었습니다."
-  save_success: "&a데이터가 저장되었습니다."
-  delete_admin: "&c권한이 없습니다."
-  camera_static_set: "&6고정 카메라가 설정되었습니다."
-  record_start: "&c&l● &f녹화 중... &7(SHIFT로 중단)"
-  record_end: "&a&l✔ &f녹화가 완료되었습니다."
+  input_name: "&e새 시네마틱 프로젝트의 이름을 적어주세요."
+  input_spawn: "&eNPC 정보를 입력하세요 (타입:ID:스킨)"
+  input_spawn_mm: "&e소환할 MythicMob의 고유 ID를 적어주세요."
+  input_spawn_me: "&e소환할 ModelEngine의 모델 코드를 적어주세요."
+  input_spawn_npc_player: "&e이름과 스킨을 적어주세요 (이름:스킨)"
+  input_spawn_npc_mob: "&eNPC의 이름을 적어주세요."
+  input_custom_type: "&b[!] 생성할 엔티티 종류를 적어주세요 (예: VILLAGER, ARMOR_STAND)"
+  input_custom_type_confirm: "&a[!] 인식된 종류: &f{type}"
+  error_invalid_type: "&c[!] 올바르지 않은 엔티티 이름입니다. 다시 확인해주세요."
+  input_sound: "&e재생할 사운드 이름을 적어주세요."
+  input_particle: "&e뿌려줄 파티클 이름을 적어주세요."
+  input_title: "&e화면에 띄울 문구를 적어주세요 (큰제목;작은제목)"
+  input_message: "&e보낼 메시지를 적어주세요."
+  input_command: "&e실행할 명령어를 적어주세요 (#을 붙이면 콘솔 실행)"
+  input_animation: "&e재생할 동작 코드를 적어주세요."
+  input_anim_stop: "&e중단할 동작 코드를 적어주세요."
+  create_success: "&a프로젝트가 성공적으로 생성되었습니다!"
+  save_success: "&a지금까지의 변경사항이 저장되었습니다."
+  delete_admin: "&c관리자 권한이 부족합니다."
+  camera_static_set: "&6현재 위치에 카메라 시점이 고정되었습니다."
+  record_start: "&c&l● &f경로 기록 중... &7(SHIFT 키로 완료)"
+  record_end: "&a&l✔ &f경로 기록이 완료되었습니다!"
+  lightning_added: "&e현재 위치에 연출용 번개가 추가되었습니다."
+  pause_title: "&e&l시선을 돌리거나 움직여서&f 계속 진행"
+  pause_subtitle: "&e[!] 연출 중지 &8| &f움직임: 진행, Shift: 스킵"
+  pause_resume: "&a&l▶ &f움직임이 감지되어 연출을 재개합니다."
+  pause_skip: "&c&l⏹ &f시네마틱을 스킵했습니다."
 
 btn:
-  camera_static: "&6&l고정 카메라 설정"
-  camera_record: "&c&l카메라 이동 녹화 시작"
+  camera_static: "&6&l현재 위치 시점 고정"
+  camera_record: "&c&l이동 경로 녹화 시작"

@@ -75,15 +75,27 @@ public class CinematicData implements Serializable {
         if (actions.isEmpty()) timeline.remove(tick);
     }
 
+    /**
+     * 해당 액션 타입이 이펙트 트랙(SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING)에 속하는지 확인
+     */
     private boolean isEffect(CinematicAction.ActionType type) {
-        return type == CinematicAction.ActionType.SOUND || type == CinematicAction.ActionType.PARTICLE ||
-                type == CinematicAction.ActionType.TITLE || type == CinematicAction.ActionType.MESSAGE || type == CinematicAction.ActionType.COMMAND;
+        return type == CinematicAction.ActionType.SOUND ||
+                type == CinematicAction.ActionType.PARTICLE ||
+                type == CinematicAction.ActionType.TITLE ||
+                type == CinematicAction.ActionType.MESSAGE ||
+                type == CinematicAction.ActionType.COMMAND ||
+                type == CinematicAction.ActionType.LIGHTNING;
     }
 
+    /**
+     * 해당 액션 타입이 NPC 액션 트랙에 속하는지 확인
+     */
     private boolean isEntityAction(CinematicAction.ActionType type) {
-        return type == CinematicAction.ActionType.SPAWN_NPC || type == CinematicAction.ActionType.MOVE_NPC ||
-                type == CinematicAction.ActionType.ANIMATION || type == CinematicAction.ActionType.SCALE ||
-                type == CinematicAction.ActionType.HIDE_ENTITY || type == CinematicAction.ActionType.SHOW_ENTITY;
+        return type == CinematicAction.ActionType.SPAWN_NPC ||
+                type == CinematicAction.ActionType.MOVE_NPC ||
+                type == CinematicAction.ActionType.ANIMATION ||
+                type == CinematicAction.ActionType.HIDE_ENTITY ||
+                type == CinematicAction.ActionType.SHOW_ENTITY;
     }
 
     public void serialize(YamlConfiguration config) {
@@ -110,6 +122,7 @@ public class CinematicData implements Serializable {
         for (Map.Entry<String, List<Location>> entry : pathRecords.entrySet()) {
             List<String> locStrings = new ArrayList<>();
             for (Location loc : entry.getValue()) {
+                if (loc.getWorld() == null) continue;
                 locStrings.add(loc.getWorld().getName() + "," + loc.getX() + "," + loc.getY() + "," + loc.getZ() + "," + loc.getYaw() + "," + loc.getPitch());
             }
             pathSection.set(entry.getKey(), locStrings);
@@ -122,21 +135,25 @@ public class CinematicData implements Serializable {
         ConfigurationSection timelineSection = config.getConfigurationSection("timeline");
         if (timelineSection != null) {
             for (String tickStr : timelineSection.getKeys(false)) {
-                int tick = Integer.parseInt(tickStr);
-                List<Map<?, ?>> actionMaps = timelineSection.getMapList(tickStr);
-                for (Map<?, ?> map : actionMaps) {
-                    CinematicAction.ActionType type = CinematicAction.ActionType.valueOf((String) map.get("type"));
-                    String value = (String) map.get("value");
-                    String extra = (String) map.get("extra");
-                    String worldName = (String) map.get("world");
-                    double x = (Double) map.get("x");
-                    double y = (Double) map.get("y");
-                    double z = (Double) map.get("z");
-                    float yaw = ((Double) map.get("yaw")).floatValue();
-                    float pitch = ((Double) map.get("pitch")).floatValue();
+                try {
+                    int tick = Integer.parseInt(tickStr);
+                    List<Map<?, ?>> actionMaps = timelineSection.getMapList(tickStr);
+                    for (Map<?, ?> map : actionMaps) {
+                        CinematicAction.ActionType type = CinematicAction.ActionType.valueOf((String) map.get("type"));
+                        String value = (String) map.get("value");
+                        String extra = (String) map.get("extra");
+                        String worldName = (String) map.get("world");
+                        double x = (Double) map.get("x");
+                        double y = (Double) map.get("y");
+                        double z = (Double) map.get("z");
+                        float yaw = ((Double) map.get("yaw")).floatValue();
+                        float pitch = ((Double) map.get("pitch")).floatValue();
 
-                    Location loc = new Location(Bukkit.getWorld(worldName), x, y, z, yaw, pitch);
-                    addAction(tick, new CinematicAction(type, value, loc, extra));
+                        Location loc = new Location(Bukkit.getWorld(worldName), x, y, z, yaw, pitch);
+                        addAction(tick, new CinematicAction(type, value, loc, extra));
+                    }
+                } catch (Exception e) {
+                    Bukkit.getLogger().warning("[CinematicManager] Failed to load tick data: " + tickStr);
                 }
             }
         }
@@ -146,10 +163,12 @@ public class CinematicData implements Serializable {
                 List<String> locStrings = pathSection.getStringList(key);
                 List<Location> path = new ArrayList<>();
                 for (String s : locStrings) {
-                    String[] split = s.split(",");
-                    path.add(new Location(Bukkit.getWorld(split[0]),
-                            Double.parseDouble(split[1]), Double.parseDouble(split[2]), Double.parseDouble(split[3]),
-                            Float.parseFloat(split[4]), Float.parseFloat(split[5])));
+                    try {
+                        String[] split = s.split(",");
+                        path.add(new Location(Bukkit.getWorld(split[0]),
+                                Double.parseDouble(split[1]), Double.parseDouble(split[2]), Double.parseDouble(split[3]),
+                                Float.parseFloat(split[4]), Float.parseFloat(split[5])));
+                    } catch (Exception ignored) {}
                 }
                 pathRecords.put(key, path);
             }

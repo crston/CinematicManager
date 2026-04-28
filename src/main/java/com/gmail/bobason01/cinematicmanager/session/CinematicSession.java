@@ -1,20 +1,23 @@
 package com.gmail.bobason01.cinematicmanager.session;
 
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.events.PacketContainer;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.GameMode;
-import org.bukkit.Location;
-import org.bukkit.Particle;
+import com.gmail.bobason01.cinematicmanager.manager.LangKey;
+import com.gmail.bobason01.cinematicmanager.manager.LangManager;
+import org.bukkit.*;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class CinematicSession {
 
@@ -23,19 +26,26 @@ public class CinematicSession {
     private final CinematicData data;
 
     private boolean active = false;
+    private boolean paused = false;
     private boolean hasPapi = false;
     private BukkitTask ticker;
     private int currentTick = 0;
     private int maxTick = 0;
 
+    private Location originLocation;
+    private GameMode originalGameMode;
+
     private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
     private final Map<String, Location> spawnLocations = new ConcurrentHashMap<>();
     private final Map<String, ActivePath> movingNpcs = new ConcurrentHashMap<>();
 
-    private GameMode originalGameMode;
     private Location staticCameraLoc = null;
     private List<Location> cameraPath = null;
     private int cameraStep = 0;
+
+    public CinematicSession(CinematicManager plugin, Player player, String id) {
+        this(plugin, player, plugin.getDataManager().getCinematic(id));
+    }
 
     public CinematicSession(CinematicManager plugin, Player player, CinematicData data) {
         this.plugin = plugin;
@@ -44,24 +54,14 @@ public class CinematicSession {
         this.hasPapi = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
     }
 
-    public CinematicSession(CinematicManager plugin, Player player, String id) {
-        this(plugin, player, plugin.getConfigManager().getCinematic(id));
-    }
-
-    private String sanitize(String id) {
-        if (id == null) return "";
-        String clean = ChatColor.stripColor(id);
-        if (clean.contains(">>")) clean = clean.split(">>")[1];
-        else if (clean.contains("|")) clean = clean.split("\\|")[1];
-        return clean.replace("[ID:", "").replace("[", "").replace("]", "").trim().toLowerCase();
-    }
-
     public void start() {
         if (active || data == null) return;
         this.active = true;
+        this.originLocation = player.getLocation().clone();
         this.originalGameMode = player.getGameMode();
         this.maxTick = data.getLastTick();
         this.currentTick = 0;
+
         player.setGameMode(GameMode.SPECTATOR);
         runTicker();
     }
@@ -71,54 +71,45 @@ public class CinematicSession {
             @Override
             public void run() {
                 if (!active || !player.isOnline()) { stop(); return; }
+                if (paused) return;
+
                 handleCameraPlayback();
                 updateNpcMovements();
+
                 List<CinematicAction> actions = data.getTimeline().get(currentTick);
                 if (actions != null) {
                     for (CinematicAction action : actions) processAction(action);
                 }
+
                 if (currentTick > maxTick && movingNpcs.isEmpty()) { stop(); return; }
                 currentTick++;
             }
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    private void updateNpcMovements() {
-        if (movingNpcs.isEmpty()) return;
-        Iterator<Map.Entry<String, ActivePath>> it = movingNpcs.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, ActivePath> entry = it.next();
-            ActivePath path = entry.getValue();
-            Entity entity = findEntity(entry.getKey());
-            int elapsed = currentTick - path.startTick;
+    /**
+     * 일시 중단 상태를 설정하고 다국어 메시지를 출력합니다.
+     */
+    public void setPaused(boolean paused) {
+        this.paused = paused;
+        LangManager lang = plugin.getLangManager();
 
-            if (entity == null || !entity.isValid() || elapsed >= path.relativeLocations.size()) {
-                it.remove();
-                continue;
-            }
-
-            Location rel = path.relativeLocations.get(elapsed);
-            // 기록된 상대 좌표를 NPC의 스폰 좌표(baseOrigin)에 더해 위치 복원
-            Location finalLoc = path.baseOrigin.clone().add(rel.getX(), rel.getY(), rel.getZ());
-            finalLoc.setYaw(rel.getYaw());
-            finalLoc.setPitch(rel.getPitch());
-
-            plugin.getNpcManager().move(player, entity, finalLoc);
+        if (paused) {
+            // 다국어 처리된 타이틀 및 메시지 전송
+            player.sendTitle(" ", lang.get(LangKey.MSG_PAUSE_TITLE), 0, 60, 10);
+            player.sendMessage(lang.getPrefixed(LangKey.MSG_PAUSE_SUBTITLE));
+        } else {
+            // 재개 시 타이틀 제거
+            player.sendTitle("", "", 0, 5, 0);
         }
     }
 
-    private Entity findEntity(String key) {
-        if (key == null) return null;
-        String searchKey = sanitize(key);
+    public boolean isPaused() {
+        return paused;
+    }
 
-        if (activeEntities.containsKey(searchKey)) return activeEntities.get(searchKey);
-
-        for (Map.Entry<String, Entity> entry : activeEntities.entrySet()) {
-            if (entry.getKey().contains(searchKey) || searchKey.contains(entry.getKey())) {
-                return entry.getValue();
-            }
-        }
-        return null;
+    public void skip() {
+        stop();
     }
 
     private void processAction(CinematicAction action) {
@@ -133,82 +124,45 @@ public class CinematicSession {
             case COMMAND -> handleCommand(action);
             case HIDE_ENTITY -> handleHide(action);
             case SHOW_ENTITY -> handleShow(action);
-            case ANIMATION -> {
-                Entity e = findEntity(action.getExtra());
-                if (e != null) {
-                    String animValue = action.getValue();
-                    if (hasPapi) animValue = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, animValue);
-                    plugin.getNpcManager().playAnimation(player, e, animValue);
-                }
-            }
-        }
-    }
-
-    private boolean isEntityType(String str) {
-        if (str.equalsIgnoreCase("PLAYER")) return true;
-        try {
-            org.bukkit.entity.EntityType.valueOf(str.toUpperCase());
-            return true;
-        } catch (Exception e) {
-            return false;
+            case LIGHTNING -> handleLightning(action);
+            case ANIMATION -> handleAnimation(action);
         }
     }
 
     private void handleSpawn(CinematicAction action) {
-        String rawValue = action.getValue();
-        String cleanKey = sanitize(rawValue);
-
-        String spawnName = rawValue;
+        String spawnName = action.getValue();
         if (hasPapi) spawnName = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, spawnName);
 
-        Location loc = action.getLocation().clone();
+        Location loc = action.getLocation();
         Entity npc = null;
-        String lowerSpawn = spawnName.toLowerCase();
+        String lower = spawnName.toLowerCase();
 
-        if (lowerSpawn.contains("npc:")) {
-            String val = spawnName.substring(lowerSpawn.indexOf("npc:") + 4);
+        if (lower.contains("npc:")) {
+            String val = spawnName.substring(lower.indexOf("npc:") + 4);
             String[] split = val.split(":");
-
-            String type = "PLAYER";
-            String name = split[0];
-            String skin = split.length > 1 ? split[1] : split[0];
-
+            String type = "PLAYER", name = split[0], skin = split.length > 1 ? split[1] : split[0];
             if (split.length >= 2 && isEntityType(split[0])) {
-                type = split[0];
-                name = split[1];
-                skin = split.length > 2 ? split[2] : name;
+                type = split[0]; name = split[1]; skin = split.length > 2 ? split[2] : name;
             }
-
             npc = plugin.getNpcManager().spawnNPC(player, loc, type, name, skin);
-        } else if (lowerSpawn.contains("mythicmobs:")) {
-            npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(lowerSpawn.indexOf("mythicmobs:") + 11).trim(), loc);
-        } else if (lowerSpawn.contains("modelengine:")) {
-            npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(lowerSpawn.indexOf("modelengine:") + 12).trim(), loc);
+        } else if (lower.contains("mythicmobs:")) {
+            npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(lower.indexOf("mythicmobs:") + 11).trim(), loc);
+        } else if (lower.contains("modelengine:")) {
+            npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(lower.indexOf("modelengine:") + 12).trim(), loc);
         }
 
         if (npc != null) {
-            activeEntities.put(cleanKey, npc);
-            spawnLocations.put(cleanKey, loc);
+            String key = sanitize(action.getValue());
+            activeEntities.put(key, npc);
+            spawnLocations.put(key, loc);
         }
     }
 
     private void handleNpcMove(CinematicAction action) {
         String targetKey = sanitize(action.getExtra());
         List<Location> relativePath = data.getPathRecord(action.getValue());
-
-        // 소환된 위치를 기준점으로 삼아 이동을 시작함
         Location origin = spawnLocations.get(targetKey);
-        if (origin == null) {
-            for (Map.Entry<String, Location> entry : spawnLocations.entrySet()) {
-                if (entry.getKey().contains(targetKey) || targetKey.contains(entry.getKey())) {
-                    origin = entry.getValue();
-                    targetKey = entry.getKey();
-                    break;
-                }
-            }
-        }
-
-        if (relativePath != null && !relativePath.isEmpty() && origin != null) {
+        if (relativePath != null && origin != null) {
             movingNpcs.put(targetKey, new ActivePath(relativePath, currentTick, origin));
         }
     }
@@ -219,13 +173,12 @@ public class CinematicSession {
             this.cameraPath = null;
         } else {
             List<Location> relativePath = data.getPathRecord(action.getValue());
-            if (relativePath != null && !relativePath.isEmpty()) {
+            if (relativePath != null) {
                 Location origin = action.getLocation();
                 List<Location> absolutePath = new ArrayList<>();
                 for (Location rel : relativePath) {
                     Location abs = origin.clone().add(rel.getX(), rel.getY(), rel.getZ());
-                    abs.setYaw(rel.getYaw());
-                    abs.setPitch(rel.getPitch());
+                    abs.setYaw(rel.getYaw()); abs.setPitch(rel.getPitch());
                     absolutePath.add(abs);
                 }
                 this.cameraPath = absolutePath;
@@ -237,7 +190,58 @@ public class CinematicSession {
 
     private void handleCameraPlayback() {
         if (staticCameraLoc != null) player.teleport(staticCameraLoc);
-        else if (cameraPath != null && cameraStep < cameraPath.size()) player.teleport(cameraPath.get(cameraStep++));
+        else if (cameraPath != null && cameraStep < cameraPath.size()) {
+            player.teleport(cameraPath.get(cameraStep++));
+        }
+    }
+
+    private void updateNpcMovements() {
+        Iterator<Map.Entry<String, ActivePath>> it = movingNpcs.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, ActivePath> entry = it.next();
+            ActivePath path = entry.getValue();
+            Entity entity = findEntity(entry.getKey());
+            int elapsed = currentTick - path.startTick;
+            if (entity == null || !entity.isValid() || elapsed >= path.relativeLocations.size()) {
+                it.remove(); continue;
+            }
+            Location rel = path.relativeLocations.get(elapsed);
+            Location finalLoc = path.baseOrigin.clone().add(rel.getX(), rel.getY(), rel.getZ());
+            finalLoc.setYaw(rel.getYaw()); finalLoc.setPitch(rel.getPitch());
+            plugin.getNpcManager().move(player, entity, finalLoc);
+        }
+    }
+
+    private void handleAnimation(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e != null) {
+            String val = action.getValue();
+            if (hasPapi) val = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, val);
+            plugin.getNpcManager().playAnimation(player, e, val);
+        }
+    }
+
+    private void handleCommand(CinematicAction action) {
+        String cmd = action.getValue().replace("%player%", player.getName());
+        if (hasPapi) cmd = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, cmd);
+        final String finalCmd = cmd;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (finalCmd.startsWith("#")) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCmd.substring(1).trim());
+            else player.performCommand(finalCmd.startsWith("/") ? finalCmd.substring(1) : finalCmd);
+        });
+    }
+
+    private void handleLightning(CinematicAction action) {
+        Location loc = action.getLocation();
+        PacketContainer packet = ProtocolLibrary.getProtocolManager().createPacket(PacketType.Play.Server.SPAWN_ENTITY);
+        packet.getIntegers().write(0, ThreadLocalRandom.current().nextInt(100000, 200000));
+        packet.getUUIDs().write(0, UUID.randomUUID());
+        packet.getEntityTypeModifier().write(0, EntityType.LIGHTNING_BOLT);
+        packet.getDoubles().write(0, loc.getX()).write(1, loc.getY()).write(2, loc.getZ());
+        try {
+            ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet);
+            player.playSound(loc, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 10f, 1f);
+        } catch (Exception ignored) {}
     }
 
     private void handleParticle(CinematicAction action) {
@@ -257,13 +261,6 @@ public class CinematicSession {
         player.sendMessage(msg.replace("&", "§"));
     }
 
-    private void handleCommand(CinematicAction action) {
-        String cmd = action.getValue().replace("%player%", player.getName());
-        if (hasPapi) cmd = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, cmd);
-        if (cmd.startsWith("#")) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.substring(1));
-        else player.performCommand(cmd);
-    }
-
     private void handleHide(CinematicAction action) {
         Entity e = findEntity(action.getValue());
         if (e != null) e.teleport(e.getLocation().add(0, -100, 0));
@@ -274,27 +271,47 @@ public class CinematicSession {
         if (e != null) e.teleport(action.getLocation());
     }
 
+    private Entity findEntity(String key) {
+        if (key == null) return null;
+        String sk = sanitize(key);
+        if (activeEntities.containsKey(sk)) return activeEntities.get(sk);
+        for (Map.Entry<String, Entity> entry : activeEntities.entrySet()) {
+            if (entry.getKey().contains(sk) || sk.contains(entry.getKey())) return entry.getValue();
+        }
+        return null;
+    }
+
+    private String sanitize(String id) {
+        if (id == null) return "";
+        return ChatColor.stripColor(id).toLowerCase().trim();
+    }
+
+    private boolean isEntityType(String s) {
+        try { EntityType.valueOf(s.toUpperCase()); return true; } catch (Exception e) { return false; }
+    }
+
     public void stop() {
         if (!active) return;
-        this.active = false;
+        active = false;
         if (ticker != null) ticker.cancel();
         activeEntities.values().forEach(e -> plugin.getNpcManager().remove(e));
         activeEntities.clear(); movingNpcs.clear(); spawnLocations.clear();
-        if (player.isOnline()) player.setGameMode(originalGameMode);
+        if (player.isOnline()) {
+            player.setGameMode(originalGameMode);
+            player.teleport(originLocation);
+        }
     }
 
-    public void skip() { stop(); }
-    public boolean isActive() { return active; }
+    public boolean isActive() {
+        return active;
+    }
 
     private static class ActivePath {
         final List<Location> relativeLocations;
         final int startTick;
         final Location baseOrigin;
-
-        ActivePath(List<Location> relativeLocations, int startTick, Location baseOrigin) {
-            this.relativeLocations = relativeLocations;
-            this.startTick = startTick;
-            this.baseOrigin = baseOrigin;
+        ActivePath(List<Location> rl, int st, Location bo) {
+            this.relativeLocations = rl; this.startTick = st; this.baseOrigin = bo;
         }
     }
 }

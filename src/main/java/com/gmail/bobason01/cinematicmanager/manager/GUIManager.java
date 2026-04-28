@@ -51,13 +51,14 @@ public class GUIManager {
         CinematicData data = plugin.getDataManager().getCinematic(id);
         if (data == null) return;
         Inventory inv = Bukkit.createInventory(null, 54, lang.format(LangKey.MENU_STUDIO, "{id}", id));
-        int startTick = page * 9 * 20;
+
         for (int i = 0; i < 9; i++) {
-            int tick = startTick + (i * 20);
+            int tick = (page * 9 + i) * 20;
             inv.setItem(i, createItem(Material.CLOCK, lang.format(LangKey.MENU_STUDIO_TIME, "{tick}", String.valueOf(tick)), lang.get(LangKey.MENU_STUDIO_CURRENT)));
+
             CinematicAction act = data.getActionByTrack(tick, CinematicAction.TrackType.ACTION);
             if (act == null) inv.setItem(i + 9, createItem(Material.WHITE_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_ACTION), lang.get(LangKey.MENU_STUDIO_ADD_ACTION_LORE)));
-            else inv.setItem(i + 9, createItem(Material.ARMOR_STAND, lang.format(LangKey.MENU_STUDIO_ACTION_NAME, "{type}", act.getType().name()), lang.format(LangKey.MENU_STUDIO_ACTION_TARGET, "{target}", act.getValue()), lang.get(LangKey.MENU_STUDIO_DELETE_LORE)));
+            else inv.setItem(i + 9, createItem(Material.ARMOR_STAND, lang.format(LangKey.MENU_STUDIO_ACTION_NAME, "{type}", act.getType().name()), lang.format(LangKey.MENU_STUDIO_ACTION_TARGET, "{target}", act.getExtra() != null ? act.getExtra() : act.getValue()), lang.get(LangKey.MENU_STUDIO_DELETE_LORE)));
 
             CinematicAction cam = data.getActionByTrack(tick, CinematicAction.TrackType.CAMERA);
             if (cam == null) inv.setItem(i + 18, createItem(Material.YELLOW_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_CAMERA), lang.get(LangKey.MENU_STUDIO_ADD_CAMERA_LORE)));
@@ -65,7 +66,17 @@ public class GUIManager {
 
             CinematicAction eff = data.getActionByTrack(tick, CinematicAction.TrackType.EFFECT);
             if (eff == null) inv.setItem(i + 27, createItem(Material.PINK_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_EFFECT), lang.get(LangKey.MENU_STUDIO_ADD_EFFECT_LORE)));
-            else inv.setItem(i + 27, createItem(Material.FIREWORK_STAR, lang.format(LangKey.MENU_STUDIO_EFFECT_NAME, "{type}", eff.getType().name()), lang.format(LangKey.MENU_STUDIO_EFFECT_VALUE, "{value}", eff.getValue()), lang.get(LangKey.MENU_STUDIO_DELETE_LORE)));
+            else {
+                Material icon;
+                switch (eff.getType()) {
+                    case COMMAND -> icon = Material.COMMAND_BLOCK;
+                    case LIGHTNING -> icon = Material.LIGHTNING_ROD;
+                    case MESSAGE -> icon = Material.PAPER;
+                    case TITLE -> icon = Material.NAME_TAG;
+                    default -> icon = Material.FIREWORK_STAR;
+                }
+                inv.setItem(i + 27, createItem(icon, lang.format(LangKey.MENU_STUDIO_EFFECT_NAME, "{type}", eff.getType().name()), lang.format(LangKey.MENU_STUDIO_EFFECT_VALUE, "{value}", eff.getValue()), lang.get(LangKey.MENU_STUDIO_DELETE_LORE)));
+            }
         }
         inv.setItem(45, createItem(Material.ARROW, lang.get(LangKey.MENU_STUDIO_PREV)));
         inv.setItem(46, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
@@ -73,6 +84,7 @@ public class GUIManager {
         inv.setItem(49, createItem(Material.BOOK, lang.get(LangKey.MENU_STUDIO_SAVE)));
         inv.setItem(50, createItem(Material.RED_STAINED_GLASS, lang.get(LangKey.MENU_STUDIO_STOP)));
         inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_STUDIO_NEXT)));
+
         player.setMetadata("edit_id", new FixedMetadataValue(plugin, id));
         player.setMetadata("edit_page", new FixedMetadataValue(plugin, page));
         player.openInventory(inv);
@@ -81,13 +93,13 @@ public class GUIManager {
     public void openActionSelectGUI(Player player, String id, int tick, int page) {
         LangManager lang = plugin.getLangManager();
         Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_ACTION));
+        player.setMetadata("edit_tick", new FixedMetadataValue(plugin, tick));
         inv.setItem(9, createItem(Material.ZOMBIE_HEAD, lang.get(LangKey.MENU_ACTION_SPAWN), lang.get(LangKey.MENU_ACTION_SPAWN_LORE)));
         inv.setItem(11, createItem(Material.MINECART, lang.get(LangKey.MENU_ACTION_MOVE), lang.get(LangKey.MENU_ACTION_MOVE_LORE)));
         inv.setItem(13, createItem(Material.GOLDEN_SWORD, lang.get(LangKey.MENU_ACTION_ANIMATION), lang.get(LangKey.MENU_ACTION_ANIMATION_LORE)));
         inv.setItem(15, createItem(Material.ENDER_PEARL, lang.get(LangKey.MENU_ACTION_HIDE), lang.get(LangKey.MENU_ACTION_HIDE_LORE)));
         inv.setItem(17, createItem(Material.ENDER_EYE, lang.get(LangKey.MENU_ACTION_SHOW), lang.get(LangKey.MENU_ACTION_SHOW_LORE)));
         inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
-        player.setMetadata("edit_tick", new FixedMetadataValue(plugin, tick));
         player.openInventory(inv);
     }
 
@@ -130,11 +142,9 @@ public class GUIManager {
     public void openToggleGUI(Player player, String type) {
         LangManager lang = plugin.getLangManager();
         Inventory inv = Bukkit.createInventory(null, 27, lang.format(LangKey.MENU_TOGGLE_TITLE, "{type}", type));
-
         inv.setItem(11, createItem(Material.LIME_WOOL, lang.get(LangKey.MENU_TOGGLE_ON_NAME), lang.get(LangKey.MENU_TOGGLE_ON_LORE)));
         inv.setItem(15, createItem(Material.RED_WOOL, lang.get(LangKey.MENU_TOGGLE_OFF_NAME), lang.get(LangKey.MENU_TOGGLE_OFF_LORE)));
         inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
-
         player.setMetadata("pending_toggle", new FixedMetadataValue(plugin, type));
         player.openInventory(inv);
     }
@@ -161,12 +171,16 @@ public class GUIManager {
 
     public void openEffectSelectGUI(Player player, String id, int tick, int page) {
         LangManager lang = plugin.getLangManager();
-        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_EFFECT));
+        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_STUDIO_ADD_EFFECT));
+        // 중요: 이펙트 선택창을 열 때도 현재 틱을 메타데이터로 고정
+        player.setMetadata("edit_tick", new FixedMetadataValue(plugin, tick));
         inv.setItem(10, createItem(Material.JUKEBOX, lang.get(LangKey.MENU_EFFECT_SOUND), lang.get(LangKey.MENU_EFFECT_SOUND_LORE)));
-        inv.setItem(12, createItem(Material.BLAZE_POWDER, lang.get(LangKey.MENU_EFFECT_PARTICLE), lang.get(LangKey.MENU_EFFECT_PARTICLE_LORE)));
-        inv.setItem(14, createItem(Material.NAME_TAG, lang.get(LangKey.MENU_EFFECT_TITLE), lang.get(LangKey.MENU_EFFECT_TITLE_LORE)));
-        inv.setItem(16, createItem(Material.PAPER, lang.get(LangKey.MENU_EFFECT_MESSAGE), lang.get(LangKey.MENU_EFFECT_MESSAGE_LORE)));
-        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_EFFECT_BACK)));
+        inv.setItem(11, createItem(Material.BLAZE_POWDER, lang.get(LangKey.MENU_EFFECT_PARTICLE), lang.get(LangKey.MENU_EFFECT_PARTICLE_LORE)));
+        inv.setItem(12, createItem(Material.NAME_TAG, lang.get(LangKey.MENU_EFFECT_TITLE), lang.get(LangKey.MENU_EFFECT_TITLE_LORE)));
+        inv.setItem(13, createItem(Material.PAPER, lang.get(LangKey.MENU_EFFECT_MESSAGE), lang.get(LangKey.MENU_EFFECT_MESSAGE_LORE)));
+        inv.setItem(15, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_EFFECT_COMMAND), lang.get(LangKey.MENU_EFFECT_COMMAND_LORE)));
+        inv.setItem(16, createItem(Material.LIGHTNING_ROD, lang.get(LangKey.MENU_EFFECT_LIGHTNING), lang.get(LangKey.MENU_EFFECT_LIGHTNING_LORE)));
+        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
         player.openInventory(inv);
     }
 

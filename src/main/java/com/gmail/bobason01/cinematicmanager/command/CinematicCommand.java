@@ -4,6 +4,7 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
+import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import com.gmail.bobason01.cinematicmanager.session.RecordSession;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -25,7 +26,8 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
 
     public CinematicCommand(CinematicManager plugin) {
         this.plugin = plugin;
-        this.subCommands = Arrays.asList("create", "edit", "play", "stop", "list", "reload");
+        // pause 서브 커맨드 추가
+        this.subCommands = Arrays.asList("create", "edit", "play", "pause", "stop", "list", "reload");
     }
 
     @Override
@@ -112,6 +114,24 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
+            // [추가] 일시 중단 / 재개 커맨드
+            case "pause": {
+                Player target = null;
+                if (args.length >= 2) {
+                    target = Bukkit.getPlayerExact(args[1]);
+                } else if (sender instanceof Player) {
+                    target = (Player) sender;
+                }
+
+                if (target != null) {
+                    CinematicSession session = plugin.getSessionManager().getSession(target);
+                    if (session != null) {
+                        session.setPaused(!session.isPaused());
+                    }
+                }
+                return true;
+            }
+
             case "stop": {
                 Player target = null;
 
@@ -139,13 +159,8 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
 
-                // 메인 configyml 리로드
                 plugin.reloadConfig();
-
-                // 다국어 언어 파일 리로드 및 캐시 갱신
                 plugin.getLangManager().load();
-
-                // 시네마틱 데이터 파일 리로드
                 plugin.getDataManager().loadAll();
 
                 sender.sendMessage("§a[CinematicManager] Configuration, Language, and Cinematic files have been reloaded.");
@@ -171,7 +186,8 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                 List<String> ids = new ArrayList<>(plugin.getDataManager().getIds());
                 return StringUtil.copyPartialMatches(args[1], ids, new ArrayList<>(ids.size()));
             }
-            if (subCommand.equals("stop")) {
+            // pause와 stop은 플레이어 이름을 추천
+            if (subCommand.equals("stop") || subCommand.equals("pause")) {
                 List<String> playerNames = new ArrayList<>(Bukkit.getOnlinePlayers().size());
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     playerNames.add(p.getName());

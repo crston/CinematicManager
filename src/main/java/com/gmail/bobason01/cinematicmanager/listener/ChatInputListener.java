@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 
 import java.util.List;
@@ -58,83 +59,75 @@ public class ChatInputListener implements Listener {
             }
 
             if (context.type.equals("CUSTOM_TYPE")) {
-                String typeStr = message.toUpperCase();
                 try {
-                    EntityType.valueOf(typeStr);
-                    player.sendMessage(lang.format(LangKey.MSG_INPUT_CUSTOM_TYPE_CONFIRM, "{type}", typeStr));
+                    EntityType.valueOf(message.toUpperCase());
+                    player.sendMessage(lang.format(LangKey.MSG_INPUT_CUSTOM_TYPE_CONFIRM, "{type}", message.toUpperCase()));
                     player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_MOB));
-                    startTrackInput(player, context.id, "SPAWN", context.tick, context.prefix + typeStr + ":");
-                } catch (IllegalArgumentException e) {
+                    startTrackInput(player, context.id, "SPAWN", context.tick, context.prefix + message.toUpperCase() + ":");
+                } catch (Exception e) {
                     player.sendMessage(lang.getPrefixed(LangKey.MSG_ERROR_INVALID_TYPE));
                     startTrackInput(player, context.id, "CUSTOM_TYPE", context.tick, context.prefix);
                 }
                 return;
             }
 
-            CinematicData data = plugin.getDataManager().getCinematic(context.id);
+            // [핵심] 현재 편집 중인 시네마틱 ID와 틱 정보를 메타데이터에서 재검증
+            String editId = getMetadata(player, "edit_id");
+            String targetId = (editId != null) ? editId : context.id;
+
+            // 틱 정보는 메타데이터에 있다면 최우선적으로 사용 (다른 트랙 생성 방지)
+            int targetTick = context.tick;
+            String metaTick = getMetadata(player, "edit_tick");
+            if (metaTick != null) targetTick = Integer.parseInt(metaTick);
+
+            CinematicData data = plugin.getDataManager().getCinematic(targetId);
             if (data == null) return;
 
-            CinematicAction.ActionType actionType = null;
-            String processedValue = message;
-            String extra = null;
-
-            switch (context.type) {
-                case "SPAWN" -> {
-                    actionType = CinematicAction.ActionType.SPAWN_NPC;
-                    processedValue = context.prefix + message;
-                }
-                case "SOUND" -> actionType = CinematicAction.ActionType.SOUND;
-                case "PARTICLE" -> actionType = CinematicAction.ActionType.PARTICLE;
-                case "TITLE" -> actionType = CinematicAction.ActionType.TITLE;
-                case "MESSAGE" -> actionType = CinematicAction.ActionType.MESSAGE;
-                case "STATE" -> {
-                    actionType = CinematicAction.ActionType.ANIMATION;
-                    extra = getMetadata(player, "edit_npc_target");
-                }
-                case "STOP" -> {
-                    actionType = CinematicAction.ActionType.ANIMATION;
-                    processedValue = "STOP:" + message;
-                    extra = getMetadata(player, "edit_npc_target");
-                }
-                case "SCALE" -> {
-                    actionType = CinematicAction.ActionType.SCALE;
-                    extra = getMetadata(player, "edit_npc_target");
-                }
-            }
+            CinematicAction.ActionType actionType = switch (context.type) {
+                case "SPAWN" -> CinematicAction.ActionType.SPAWN_NPC;
+                case "SOUND" -> CinematicAction.ActionType.SOUND;
+                case "PARTICLE" -> CinematicAction.ActionType.PARTICLE;
+                case "TITLE" -> CinematicAction.ActionType.TITLE;
+                case "MESSAGE" -> CinematicAction.ActionType.MESSAGE;
+                case "COMMAND" -> CinematicAction.ActionType.COMMAND;
+                case "STATE", "STOP" -> CinematicAction.ActionType.ANIMATION;
+                default -> null;
+            };
 
             if (actionType != null) {
-                CinematicAction action = new CinematicAction(actionType, processedValue, context.loc, extra);
-                data.addAction(context.tick, action);
+                String val = context.prefix + message;
+                String extra = null;
+                if (context.type.equals("STATE") || context.type.equals("STOP")) {
+                    extra = getMetadata(player, "edit_npc_target");
+                    if (context.type.equals("STOP")) val = "STOP:" + message;
+                }
+
+                // 지정된 정확한 틱 위치에 액션 추가
+                data.addAction(targetTick, new CinematicAction(actionType, val, context.loc, extra));
                 plugin.getDataManager().saveCinematic(data);
                 player.sendMessage(lang.getPrefixed(LangKey.MSG_SAVE_SUCCESS));
             }
 
-            int targetPage = context.tick / 180;
-            plugin.getGuiManager().openStudioGUI(player, context.id, targetPage);
+            // 입력 완료 후 스튜디오로 복귀 (현재 페이지 계산)
+            int targetPage = targetTick / 180;
+            plugin.getGuiManager().openStudioGUI(player, targetId, targetPage);
         });
     }
 
     private String getMetadata(Player player, String key) {
         if (player.hasMetadata(key)) {
             List<MetadataValue> values = player.getMetadata(key);
-            if (!values.isEmpty()) return values.get(0).asString();
+            for (MetadataValue v : values) if (v.getOwningPlugin().equals(plugin)) return v.asString();
         }
         return null;
     }
 
     private static class InputContext {
-        final String type;
-        final String id;
+        final String type, id, prefix;
         final int tick;
         final Location loc;
-        final String prefix;
-
         InputContext(String type, String id, int tick, Location loc, String prefix) {
-            this.type = type;
-            this.id = id;
-            this.tick = tick;
-            this.loc = loc;
-            this.prefix = prefix;
+            this.type = type; this.id = id; this.tick = tick; this.loc = loc; this.prefix = prefix;
         }
     }
 }

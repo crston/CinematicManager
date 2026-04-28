@@ -1,161 +1,175 @@
 prefix: "&6&lCinematic &8| &f"
 
 menu:
-  main: "&8Cinematic Manager"
-  main_list: "&e&lCinematic List"
+  main: "&8Cinematic Controller"
+  main_list: "&e&lMy Productions"
   main_list_lore:
     - ""
-    - "&7Check saved projects"
-    - "&7and edit or manage them."
-  main_create: "&a&lCreate New Project"
+    - "&7Load created projects to"
+    - "&7edit or manage them."
+  main_create: "&a&lCreate New Scenario"
   main_create_lore:
     - ""
-    - "&7Start a new cinematic"
-    - "&7project."
+    - "&7Start a new project with"
+    - "&7fresh backgrounds and flow."
 
-  list: "&8Cinematic List"
+  list: "&8Production Project List"
   list_id: "&fID &8» &b{id}"
   list_edit_lore:
     - ""
-    - "&eLeft-Click &8» &fEnter Studio"
+    - "&eLeft-Click &8» &fEnter Edit Studio"
   list_delete_lore:
-    - "&cRight-Click &8» &fDelete Project"
+    - "&cRight-Click &8» &fDelete this project"
   list_prev: "&e◀ Previous Page"
-  list_back: "&7◀ Back to Menu"
+  list_back: "&7◀ Back to Main"
   list_next: "&eNext Page ▶"
 
   studio: "&8Studio &8| &0{id}"
-  studio_time: "&6&lTime &8» &e{tick} Ticks"
-  studio_current: "&f&lTimeline Info"
-  studio_add_action: "&a&l+ &fAdd NPC Action"
+  studio_time: "&6&lElapsed Time &8» &e{tick} Ticks"
+  studio_current: "&f&lCurrent Timeline Info"
+  studio_add_action: "&a&l+ &fPlace NPC Action"
   studio_add_action_lore:
-    - "&7Add NPC effects such as"
-    - "&7spawn, move, animation, hide, etc."
+    - "&7Spawn NPCs, move them,"
+    - "&7or give specific orders."
   studio_action_name: "&bAction &8» &f{type}"
   studio_action_target: "&3Target &8» &f{target}"
-  studio_add_camera: "&6&l+ &fCamera Settings"
+  studio_add_camera: "&6&l+ &fSet Camera Angle"
   studio_add_camera_lore:
-    - "&7Set static camera or"
-    - "&7recorded camera paths."
+    - "&7Fix view or specify a path"
+    - "&7for the camera to move."
   studio_camera_name: "&6Camera &8» &f{type}"
-  studio_add_effect: "&d&l+ &fAdd Effect"
+  studio_add_effect: "&d&l+ &fAdd Visual Effect"
   studio_add_effect_lore:
-    - "&7Add special effects like"
-    - "&7sounds, particles, titles, etc."
+    - "&7Add titles, sound effects,"
+    - "&7particles, and more."
   studio_effect_name: "&dEffect &8» &f{type}"
   studio_effect_value: "&7Value &8» &f{value}"
   studio_delete_lore:
     - ""
-    - "&cRight-Click &8» &fRemove Action"
+    - "&cRight-Click &8» &fRemove this action"
   studio_prev: "&e◀ Previous Tick"
-  studio_back: "&7◀ End Editing"
+  studio_back: "&7◀ Exit Studio"
   studio_play: "&a&l▶ &2Preview Cinematic"
   studio_save: "&b&l💾 &3Save Progress"
-  studio_stop: "&c&l⏹ &4Stop Preview"
+  studio_stop: "&c&l⏹ &4Stop Playback"
   studio_next: "&eNext Tick ▶"
 
-  action: "&8Select Action"
+  action: "&8Select Action to Perform"
   action_spawn: "&aSpawn NPC"
   action_spawn_lore:
-    - "&7Spawn NPC, MythicMob, or"
-    - "&7ModelEngine at this location."
-  action_move: "&eRecord Movement"
+    - "&7Place custom NPCs or"
+    - "&7MythicMobs at current location."
+  action_move: "&eRecord Movement Path"
   action_move_lore:
-    - "&7Directly control and record"
-    - "&7the NPC's movement."
-  action_animation: "&6Animation Settings"
+    - "&7Record NPC path by"
+    - "&7moving your character."
+  action_animation: "&6Detailed Behavior"
   action_animation_lore:
-    - "&7Set detailed NPC states like"
-    - "&7actions, scaling, and state control."
+    - "&7Set special actions,"
+    - "&7animations, or states."
   action_hide: "&cHide NPC"
   action_hide_lore:
-    - "&7Make the target NPC invisible."
+    - "&7Make the target invisible."
   action_show: "&bShow NPC"
   action_show_lore:
-    - "&7Show the hidden NPC again."
+    - "&7Make a hidden NPC reappear."
   action_back: "&7Back"
 
-  spawn_type: "&8Select Spawn Type"
-  spawn_type_npc: "&e&lStandard NPC"
+  spawn_type: "&8Which entity to spawn?"
+  spawn_type_npc: "&e&lCustom NPC"
   spawn_type_mm: "&6&lMythicMobs"
   spawn_type_me: "&b&lModelEngine"
 
-  npc_type: "&8Select NPC Entity Type"
-  npc_type_player: "&f&lPlayer"
+  npc_type: "&8Select NPC Form"
+  npc_type_player: "&f&lHuman (Player)"
   npc_type_zombie: "&2&lZombie"
   npc_type_pig: "&d&lPig"
   npc_type_skeleton: "&7&lSkeleton"
-  npc_type_custom: "&b&lCustom Type Input"
+  npc_type_custom: "&b&lInput Name Manually"
   npc_type_custom_lore:
-    - "&7Enter entity type name in chat."
-    - "&7Ex: VILLAGER, COW, ARMOR_STAND, etc."
+    - "&7Enter the Entity type name."
+    - "&7Ex: VILLAGER, COW, BLAZE"
 
-  animation: "&8Select Anim & State"
-  animation_spin: "&fSpin (SPIN)"
-  animation_spin_lore: ["&7Set NPC to spinning state."]
-  animation_sprint: "&fSprint (SPRINT)"
-  animation_sprint_lore: ["&7Set NPC to sprinting state."]
-  animation_swim: "&fSwim (SWIM)"
-  animation_swim_lore: ["&7Set NPC to swimming state."]
-  animation_sneak: "&fSneak (SNEAK)"
-  animation_sneak_lore: ["&7Set NPC to sneaking state."]
-  animation_sleep: "&fSleep (SLEEP)"
-  animation_sleep_lore: ["&7Set NPC to sleeping state."]
-  animation_custom: "&bModelEngine State"
-  animation_custom_lore: ["&7Enter the animation name to play."]
-  animation_stop: "&4Stop Animation"
-  animation_stop_lore: ["&7Stop a specific active state."]
+  animation: "&8Select Behavior"
+  animation_spin: "&fSpinning"
+  animation_spin_lore: ["&7Make the target spin in place."]
+  animation_sprint: "&fSprinting"
+  animation_sprint_lore: ["&7Set the target to running state."]
+  animation_swim: "&fSwimming"
+  animation_swim_lore: ["&7Set the target to swimming state."]
+  animation_sneak: "&fSneaking"
+  animation_sneak_lore: ["&7Set the target to crouching state."]
+  animation_sleep: "&fSleeping/Lying"
+  animation_sleep_lore: ["&7Set the target to lying down."]
+  animation_custom: "&bModelEngine Animation"
+  animation_custom_lore: ["&7Enter specific animation code."]
+  animation_stop: "&4Stop Behavior"
+  animation_stop_lore: ["&7Stop current special state."]
 
   toggle:
-    title: "&8Select State &8| &0{type}"
-    on_name: "&a&lON"
-    on_lore: ["&7Enable this state."]
-    off_name: "&c&lOFF"
-    off_lore: ["&7Disable this state."]
+    title: "&8Toggle State &8| &0{type}"
+    on_name: "&a&lEnabled (ON)"
+    on_lore: ["&7Apply this state immediately."]
+    off_name: "&c&lDisabled (OFF)"
+    off_lore: ["&7Remove this state."]
 
-  npc: "&8Select Target NPC"
-  npc_name: "&fNPC &8» &b{name}"
+  npc: "&8Select NPC to Command"
+  npc_name: "&fTarget &8» &b{name}"
   npc_select_lore:
     - ""
-    - "&eClick &8» &fSelect this NPC"
+    - "&eClick &8» &fSelect this entity"
   npc_id_lore:
-    - "&8Identifier &8» &7{id}"
+    - "&8Unique ID &8» &7{id}"
   npc_back: "&7Back"
 
-  effect: "&8Select Effect"
-  effect_sound: "&fPlay Sound"
-  effect_sound_lore: ["&7Enter sound node"]
-  effect_particle: "&fSpawn Particle"
-  effect_particle_lore: ["&7Enter particle name"]
-  effect_title: "&fDisplay Title"
-  effect_title_lore: ["&7Format: Title;Subtitle"]
-  effect_message: "&fSend Message"
-  effect_message_lore: ["&7Enter chat message"]
+  effect_sound: "&fPlay Sound Effect"
+  effect_sound_lore: ["&7Enter sound node in chat."]
+  effect_particle: "&fParticle Effect"
+  effect_particle_lore: ["&7Enter particle name in chat."]
+  effect_title: "&fText Effect (Title)"
+  effect_title_lore: ["&7Format: MainTitle;SubTitle"]
+  effect_message: "&fChat Notification"
+  effect_message_lore: ["&7Enter text to send to viewers."]
+  effect_command: "&d&lExecute Command"
+  effect_command_lore:
+    - "&7Run command targeting the viewer."
+    - "&7Start with # for console execution."
+    - "&7Placeholder: %player%"
+  effect_lightning: "&e&lSpawn Lightning"
+  effect_lightning_lore:
+    - "&7Spawn cinematic lightning at"
+    - "&7current location (Client-side)."
   effect_back: "&7Back"
 
 msg:
-  input_name: "&ePlease enter the cinematic name."
-  input_spawn: "&eEnter NPC data (Type:ID:Skin)"
-  input_spawn_mm: "&eEnter the MythicMob Internal Name."
-  input_spawn_me: "&eEnter the ModelEngine Model ID."
-  input_spawn_npc_player: "&eEnter NPC name and skin (Format: Name:Skin)"
-  input_spawn_npc_mob: "&eEnter the NPC's name."
-  input_custom_type: "&b[!] Enter entity type to spawn. (Ex: VILLAGER, ARMOR_STAND)"
-  input_custom_type_confirm: "&a[!] Confirmed type: &f{type}"
-  error_invalid_type: "&c[!] Invalid entity type. Try again or go back to menu."
-  input_sound: "&eEnter the sound node."
+  input_name: "&eEnter the name for the new cinematic project."
+  input_spawn: "&eEnter NPC info (Type:ID:Skin)"
+  input_spawn_mm: "&eEnter the MythicMob ID to spawn."
+  input_spawn_me: "&eEnter the ModelEngine code to spawn."
+  input_spawn_npc_player: "&eEnter Name and Skin (Name:Skin)"
+  input_spawn_npc_mob: "&eEnter the NPC name."
+  input_custom_type: "&b[!] Enter entity type (Ex: VILLAGER, ARMOR_STAND)"
+  input_custom_type_confirm: "&a[!] Type recognized: &f{type}"
+  error_invalid_type: "&c[!] Invalid entity name. Please check again."
+  input_sound: "&eEnter the sound name to play."
   input_particle: "&eEnter the particle name."
-  input_title: "&eEnter the title (Title;Subtitle)"
-  input_message: "&eEnter the message content."
-  input_animation: "&eEnter the animation name to play."
-  input_anim_stop: "&eEnter the animation name to stop."
-  create_success: "&aProject created successfully."
-  save_success: "&aData saved successfully."
-  delete_admin: "&cInsufficient permissions."
-  camera_static_set: "&6Static camera has been set."
-  record_start: "&c&l● &fRecording... &7(SHIFT to stop)"
-  record_end: "&a&l✔ &fRecording completed."
+  input_title: "&eEnter title text (MainTitle;SubTitle)"
+  input_message: "&eEnter the message to send."
+  input_command: "&eEnter the command (# for console)."
+  input_animation: "&eEnter the animation code."
+  input_anim_stop: "&eEnter the code to stop."
+  create_success: "&aProject created successfully!"
+  save_success: "&aChanges have been saved."
+  delete_admin: "&cInsufficient administrator permissions."
+  camera_static_set: "&6Camera view fixed at current location."
+  record_start: "&c&l● &fRecording path... &7(Press SHIFT to finish)"
+  record_end: "&a&l✔ &fRecording path completed!"
+  lightning_added: "&eCinematic lightning added at current location."
+  pause_title: "&e&lLook around or Move&f to continue"
+  pause_subtitle: "&e[!] Playback Paused &8| &fMove: Resume, Shift: Skip"
+  pause_resume: "&a&l▶ &fMovement detected. Resuming cinematic."
+  pause_skip: "&c&l⏹ &fCinematic skipped."
 
 btn:
-  camera_static: "&6&lSet Static Camera"
-  camera_record: "&c&lStart Camera Recording"
+  camera_static: "&6&lFix View Here"
+  camera_record: "&c&lStart Path Recording"

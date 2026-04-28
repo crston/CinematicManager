@@ -18,8 +18,8 @@ public class CinematicAction implements Serializable {
         COMMAND,
         HIDE_ENTITY,
         SHOW_ENTITY,
-        SCALE,
-        ANIMATION
+        ANIMATION,
+        LIGHTNING // [추가] 번개 효과
     }
 
     public enum TrackType { ACTION, CAMERA, EFFECT }
@@ -49,18 +49,9 @@ public class CinematicAction implements Serializable {
         }
     }
 
-    public ActionType getType() {
-        return type;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public String getExtra() {
-        return extra;
-    }
-
+    public ActionType getType() { return type; }
+    public String getValue() { return value; }
+    public String getExtra() { return extra; }
     public double getX() { return x; }
     public double getY() { return y; }
     public double getZ() { return z; }
@@ -74,13 +65,10 @@ public class CinematicAction implements Serializable {
     }
 
     public TrackType getTrackType() {
-        if (type == ActionType.CAMERA) {
-            return TrackType.CAMERA;
-        }
-        if (type == ActionType.SOUND || type == ActionType.PARTICLE ||
-                type == ActionType.TITLE || type == ActionType.MESSAGE || type == ActionType.COMMAND) {
-            return TrackType.EFFECT;
-        }
-        return TrackType.ACTION;
+        return switch (this.type) {
+            case SPAWN_NPC, MOVE_NPC, ANIMATION, HIDE_ENTITY, SHOW_ENTITY -> TrackType.ACTION;
+            case CAMERA -> TrackType.CAMERA;
+            case SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING -> TrackType.EFFECT;
+        };
     }
 }
