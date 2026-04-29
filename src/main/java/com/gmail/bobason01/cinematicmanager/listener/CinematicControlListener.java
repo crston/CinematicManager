@@ -1,7 +1,6 @@
 package com.gmail.bobason01.cinematicmanager.listener;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
-import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import org.bukkit.Location;

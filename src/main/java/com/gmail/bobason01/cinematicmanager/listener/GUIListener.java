@@ -19,8 +19,6 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.List;
-
 public class GUIListener implements Listener {
 
     private final CinematicManager plugin;
@@ -67,7 +65,6 @@ public class GUIListener implements Listener {
         else if (slot == 15) {
             player.closeInventory();
             plugin.getChatInputListener().startCreationInput(player);
-            player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_NAME));
         }
     }
 
@@ -122,7 +119,9 @@ public class GUIListener implements Listener {
             case 16 -> {
                 CinematicData d = plugin.getDataManager().getCinematic(id);
                 d.addAction(t, new CinematicAction(CinematicAction.ActionType.LIGHTNING, "lightning", player.getLocation(), null));
-                plugin.getDataManager().saveCinematic(d); plugin.getGuiManager().openStudioGUI(player, id, p);
+                plugin.getDataManager().saveCinematic(d);
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_LIGHTNING_ADDED));
+                plugin.getGuiManager().openStudioGUI(player, id, p);
             }
             case 22 -> plugin.getGuiManager().openStudioGUI(player, id, p);
         }

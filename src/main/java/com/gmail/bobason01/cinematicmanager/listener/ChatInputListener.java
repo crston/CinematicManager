@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 
 import java.util.List;
@@ -30,6 +29,7 @@ public class ChatInputListener implements Listener {
 
     public void startCreationInput(Player player) {
         inputQueue.put(player, new InputContext("CREATE", null, 0, null, ""));
+        player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_NAME));
     }
 
     public void startTrackInput(Player player, String id, String type, int tick) {
@@ -38,6 +38,22 @@ public class ChatInputListener implements Listener {
 
     public void startTrackInput(Player player, String id, String type, int tick, String prefix) {
         inputQueue.put(player, new InputContext(type, id, tick, player.getLocation().clone(), prefix));
+
+        LangManager lang = plugin.getLangManager();
+        switch (type) {
+            case "SOUND" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SOUND));
+            case "PARTICLE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_PARTICLE));
+            case "TITLE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_TITLE));
+            case "MESSAGE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_MESSAGE));
+            case "COMMAND" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_COMMAND));
+            case "CUSTOM_TYPE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CUSTOM_TYPE));
+            case "STATE", "STOP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_ANIMATION));
+            case "SPAWN" -> {
+                if (prefix.contains("mythicmobs")) player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_MM));
+                else if (prefix.contains("modelengine")) player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_ME));
+                else player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_PLAYER));
+            }
+        }
     }
 
     @EventHandler
@@ -62,7 +78,6 @@ public class ChatInputListener implements Listener {
                 try {
                     EntityType.valueOf(message.toUpperCase());
                     player.sendMessage(lang.format(LangKey.MSG_INPUT_CUSTOM_TYPE_CONFIRM, "{type}", message.toUpperCase()));
-                    player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_SPAWN_NPC_MOB));
                     startTrackInput(player, context.id, "SPAWN", context.tick, context.prefix + message.toUpperCase() + ":");
                 } catch (Exception e) {
                     player.sendMessage(lang.getPrefixed(LangKey.MSG_ERROR_INVALID_TYPE));
@@ -71,11 +86,8 @@ public class ChatInputListener implements Listener {
                 return;
             }
 
-            // [핵심] 현재 편집 중인 시네마틱 ID와 틱 정보를 메타데이터에서 재검증
             String editId = getMetadata(player, "edit_id");
             String targetId = (editId != null) ? editId : context.id;
-
-            // 틱 정보는 메타데이터에 있다면 최우선적으로 사용 (다른 트랙 생성 방지)
             int targetTick = context.tick;
             String metaTick = getMetadata(player, "edit_tick");
             if (metaTick != null) targetTick = Integer.parseInt(metaTick);
@@ -101,16 +113,11 @@ public class ChatInputListener implements Listener {
                     extra = getMetadata(player, "edit_npc_target");
                     if (context.type.equals("STOP")) val = "STOP:" + message;
                 }
-
-                // 지정된 정확한 틱 위치에 액션 추가
                 data.addAction(targetTick, new CinematicAction(actionType, val, context.loc, extra));
                 plugin.getDataManager().saveCinematic(data);
                 player.sendMessage(lang.getPrefixed(LangKey.MSG_SAVE_SUCCESS));
             }
-
-            // 입력 완료 후 스튜디오로 복귀 (현재 페이지 계산)
-            int targetPage = targetTick / 180;
-            plugin.getGuiManager().openStudioGUI(player, targetId, targetPage);
+            plugin.getGuiManager().openStudioGUI(player, targetId, targetTick / 180);
         });
     }
 

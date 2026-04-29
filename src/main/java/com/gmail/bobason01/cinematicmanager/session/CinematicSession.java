@@ -87,37 +87,26 @@ public class CinematicSession {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    /**
-     * 일시 중단 상태를 설정하고 다국어 메시지를 출력합니다.
-     */
     public void setPaused(boolean paused) {
         this.paused = paused;
         LangManager lang = plugin.getLangManager();
-
         if (paused) {
-            // 다국어 처리된 타이틀 및 메시지 전송
             player.sendTitle(" ", lang.get(LangKey.MSG_PAUSE_TITLE), 0, 60, 10);
             player.sendMessage(lang.getPrefixed(LangKey.MSG_PAUSE_SUBTITLE));
         } else {
-            // 재개 시 타이틀 제거
             player.sendTitle("", "", 0, 5, 0);
         }
     }
 
-    public boolean isPaused() {
-        return paused;
-    }
-
-    public void skip() {
-        stop();
-    }
+    public boolean isPaused() { return paused; }
+    public void skip() { stop(); }
 
     private void processAction(CinematicAction action) {
         switch (action.getType()) {
             case SPAWN_NPC -> handleSpawn(action);
             case MOVE_NPC -> handleNpcMove(action);
             case CAMERA -> handleCamera(action);
-            case SOUND -> player.playSound(player.getLocation(), action.getValue(), 1f, 1f);
+            case SOUND -> handleSound(action);
             case PARTICLE -> handleParticle(action);
             case TITLE -> handleTitle(action);
             case MESSAGE -> handleMessage(action);
@@ -129,14 +118,26 @@ public class CinematicSession {
         }
     }
 
+    private void handleSound(CinematicAction action) {
+        String soundName = action.getValue();
+        // player 객체를 대상으로 직접 재생하여 다른 사람에게는 들리지 않게 처리
+        player.playSound(player.getLocation(), soundName, SoundCategory.MASTER, 1f, 1f);
+    }
+
+    private void handleParticle(CinematicAction action) {
+        try {
+            Particle particle = Particle.valueOf(action.getValue().toUpperCase());
+            // spawnParticle 호출 시 첫 번째 인자로 대상 플레이어를 지정하여 개인 패킷 전송
+            player.spawnParticle(particle, action.getLocation(), 20, 0.5, 0.5, 0.5, 0.05);
+        } catch (Exception ignored) {}
+    }
+
     private void handleSpawn(CinematicAction action) {
         String spawnName = action.getValue();
         if (hasPapi) spawnName = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, spawnName);
-
         Location loc = action.getLocation();
         Entity npc = null;
         String lower = spawnName.toLowerCase();
-
         if (lower.contains("npc:")) {
             String val = spawnName.substring(lower.indexOf("npc:") + 4);
             String[] split = val.split(":");
@@ -150,7 +151,6 @@ public class CinematicSession {
         } else if (lower.contains("modelengine:")) {
             npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(lower.indexOf("modelengine:") + 12).trim(), loc);
         }
-
         if (npc != null) {
             String key = sanitize(action.getValue());
             activeEntities.put(key, npc);
@@ -244,10 +244,6 @@ public class CinematicSession {
         } catch (Exception ignored) {}
     }
 
-    private void handleParticle(CinematicAction action) {
-        try { player.spawnParticle(Particle.valueOf(action.getValue().toUpperCase()), action.getLocation(), 20, 0.5, 0.5, 0.5, 0.05); } catch (Exception ignored) {}
-    }
-
     private void handleTitle(CinematicAction action) {
         String raw = action.getValue();
         if (hasPapi) raw = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, raw);
@@ -302,9 +298,7 @@ public class CinematicSession {
         }
     }
 
-    public boolean isActive() {
-        return active;
-    }
+    public boolean isActive() { return active; }
 
     private static class ActivePath {
         final List<Location> relativeLocations;
