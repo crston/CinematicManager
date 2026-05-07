@@ -1,5 +1,5 @@
 name: CinematicManager
-version: 3.0
+version: 4.0
 main: com.gmail.bobason01.cinematicmanager.CinematicManager
 api-version: 1.21
 depend: [ProtocolLib]

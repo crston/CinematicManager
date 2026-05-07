@@ -1,7 +1,9 @@
 package com.gmail.bobason01.cinematicmanager.manager;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
+import com.gmail.bobason01.cinematicmanager.api.event.CinematicStartEvent;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.Map;
@@ -29,6 +31,11 @@ public class SessionManager {
 
     public void startSession(Player player, String id) {
         if (player == null || id == null) return;
+
+        // 시네마틱 시작 이벤트 호출
+        CinematicStartEvent event = new CinematicStartEvent(player, id);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) return;
 
         UUID uuid = player.getUniqueId();
 

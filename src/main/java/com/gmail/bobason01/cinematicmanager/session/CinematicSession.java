@@ -4,6 +4,7 @@ import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.events.PacketContainer;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
+import com.gmail.bobason01.cinematicmanager.api.event.CinematicEndEvent;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
@@ -120,14 +121,12 @@ public class CinematicSession {
 
     private void handleSound(CinematicAction action) {
         String soundName = action.getValue();
-        // player 객체를 대상으로 직접 재생하여 다른 사람에게는 들리지 않게 처리
         player.playSound(player.getLocation(), soundName, SoundCategory.MASTER, 1f, 1f);
     }
 
     private void handleParticle(CinematicAction action) {
         try {
             Particle particle = Particle.valueOf(action.getValue().toUpperCase());
-            // spawnParticle 호출 시 첫 번째 인자로 대상 플레이어를 지정하여 개인 패킷 전송
             player.spawnParticle(particle, action.getLocation(), 20, 0.5, 0.5, 0.5, 0.05);
         } catch (Exception ignored) {}
     }
@@ -295,6 +294,12 @@ public class CinematicSession {
         if (player.isOnline()) {
             player.setGameMode(originalGameMode);
             player.teleport(originLocation);
+        }
+
+        // 시네마틱 종료 이벤트 호출
+        if (data != null) {
+            CinematicEndEvent event = new CinematicEndEvent(player, data.getId());
+            Bukkit.getPluginManager().callEvent(event);
         }
     }
 
