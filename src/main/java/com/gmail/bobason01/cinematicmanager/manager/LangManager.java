@@ -8,7 +8,10 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -16,6 +19,7 @@ public class LangManager {
 
     private final CinematicManager plugin;
     private final Map<LangKey, String> langCache = new EnumMap<>(LangKey.class);
+    private final Map<LangKey, List<String>> listCache = new EnumMap<>(LangKey.class);
     private String prefix;
 
     public LangManager(CinematicManager plugin) {
@@ -25,6 +29,7 @@ public class LangManager {
 
     public void load() {
         langCache.clear();
+        listCache.clear();
         String langType = plugin.getConfig().getString("language", "en");
         String fileName = langType + ".yml";
 
@@ -51,12 +56,20 @@ public class LangManager {
         // 3. 현재 파일 로드
         YamlConfiguration config = YamlConfiguration.loadConfiguration(langFile);
 
-        // 4. 자동 업데이트 로직 (누락된 키 자동 추가)
+        // 4. 자동 업데이트 로직 (누락 키 추가 + 구버전 [F] 문구 교체)
         if (defaultConfig != null) {
             boolean changed = false;
             for (String key : defaultConfig.getKeys(true)) {
-                // 섹션이 아닌 실제 데이터 포인트만 체크
-                if (!defaultConfig.isConfigurationSection(key) && !config.contains(key)) {
+                if (defaultConfig.isConfigurationSection(key)) continue;
+
+                if (!config.contains(key)) {
+                    config.set(key, defaultConfig.get(key));
+                    changed = true;
+                    continue;
+                }
+
+                // 서버에 남은 옛 [F]/손바꾸기 안내를 jar 기본값으로 덮어씀
+                if (containsLegacyFHint(config.get(key))) {
                     config.set(key, defaultConfig.get(key));
                     changed = true;
                 }
@@ -64,7 +77,7 @@ public class LangManager {
             if (changed) {
                 try {
                     config.save(langFile);
-                    plugin.getLogger().info("Updated " + fileName + " with missing language keys.");
+                    plugin.getLogger().info("Updated " + fileName + " with missing/legacy language keys.");
                 } catch (Exception e) {
                     plugin.getLogger().severe("Could not save updated language file: " + e.getMessage());
                 }
@@ -80,9 +93,11 @@ public class LangManager {
 
             // 리스트 형태(Lore 등) 처리
             if (config.isList(path)) {
-                langCache.put(key, config.getStringList(path).stream()
+                List<String> lines = config.getStringList(path).stream()
                         .map(this::color)
-                        .collect(Collectors.joining("\n")));
+                        .collect(Collectors.toList());
+                listCache.put(key, lines);
+                langCache.put(key, String.join("\n", lines));
             }
             // 문자열 형태 처리
             else if (config.isString(path)) {
@@ -97,6 +112,10 @@ public class LangManager {
 
     public String get(LangKey key) {
         return langCache.getOrDefault(key, "§c[Error: " + key.name() + "]");
+    }
+
+    public List<String> getList(LangKey key) {
+        return listCache.getOrDefault(key, Collections.emptyList());
     }
 
     public String getPrefixed(LangKey key) {
@@ -125,5 +144,33 @@ public class LangManager {
     private String color(String s) {
         if (s == null) return "";
         return ChatColor.translateAlternateColorCodes('&', s);
+    }
+
+    private boolean containsLegacyFHint(Object value) {
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (containsLegacyFHint(item)) return true;
+            }
+            return false;
+        }
+        if (value == null) return false;
+        String text = String.valueOf(value);
+        return text.contains("[F]")
+                || text.contains("Press F")
+                || text.contains("press F")
+                || text.contains("F (swap")
+                || text.contains("F(손")
+                || text.contains("F로")
+                || text.contains("F で")
+                || text.contains("F(手")
+                || text.contains("[클릭]")
+                || text.contains("[Click]")
+                || text.contains("[クリック]")
+                || text.contains("좌클릭/우클릭")
+                || text.contains("Left/Right click")
+                || text.contains("左クリック/右クリック")
+                || text.contains("클릭으로")
+                || text.contains("Click during")
+                || text.contains("クリックで");
     }
 }

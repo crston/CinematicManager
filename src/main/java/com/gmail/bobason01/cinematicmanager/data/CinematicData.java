@@ -76,7 +76,7 @@ public class CinematicData implements Serializable {
     }
 
     /**
-     * 해당 액션 타입이 이펙트 트랙(SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING)에 속하는지 확인
+     * 해당 액션 타입이 이펙트 트랙에 속하는지 확인
      */
     private boolean isEffect(CinematicAction.ActionType type) {
         return type == CinematicAction.ActionType.SOUND ||
@@ -84,7 +84,9 @@ public class CinematicData implements Serializable {
                 type == CinematicAction.ActionType.TITLE ||
                 type == CinematicAction.ActionType.MESSAGE ||
                 type == CinematicAction.ActionType.COMMAND ||
-                type == CinematicAction.ActionType.LIGHTNING;
+                type == CinematicAction.ActionType.LIGHTNING ||
+                type == CinematicAction.ActionType.DIALOGUE ||
+                type == CinematicAction.ActionType.WAIT;
     }
 
     /**
@@ -122,8 +124,8 @@ public class CinematicData implements Serializable {
         for (Map.Entry<String, List<Location>> entry : pathRecords.entrySet()) {
             List<String> locStrings = new ArrayList<>();
             for (Location loc : entry.getValue()) {
-                if (loc.getWorld() == null) continue;
-                locStrings.add(loc.getWorld().getName() + "," + loc.getX() + "," + loc.getY() + "," + loc.getZ() + "," + loc.getYaw() + "," + loc.getPitch());
+                String world = loc.getWorld() != null ? loc.getWorld().getName() : "";
+                locStrings.add(world + "," + loc.getX() + "," + loc.getY() + "," + loc.getZ() + "," + loc.getYaw() + "," + loc.getPitch());
             }
             pathSection.set(entry.getKey(), locStrings);
         }
@@ -165,7 +167,8 @@ public class CinematicData implements Serializable {
                 for (String s : locStrings) {
                     try {
                         String[] split = s.split(",");
-                        path.add(new Location(Bukkit.getWorld(split[0]),
+                        org.bukkit.World world = split[0].isEmpty() ? null : Bukkit.getWorld(split[0]);
+                        path.add(new Location(world,
                                 Double.parseDouble(split[1]), Double.parseDouble(split[2]), Double.parseDouble(split[3]),
                                 Float.parseFloat(split[4]), Float.parseFloat(split[5])));
                     } catch (Exception ignored) {}

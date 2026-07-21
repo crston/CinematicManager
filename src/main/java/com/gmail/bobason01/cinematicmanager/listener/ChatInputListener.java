@@ -45,6 +45,8 @@ public class ChatInputListener implements Listener {
             case "PARTICLE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_PARTICLE));
             case "TITLE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_TITLE));
             case "MESSAGE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_MESSAGE));
+            case "DIALOGUE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_DIALOGUE));
+            case "WAIT" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_WAIT));
             case "COMMAND" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_COMMAND));
             case "CUSTOM_TYPE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CUSTOM_TYPE));
             case "STATE", "STOP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_ANIMATION));
@@ -101,6 +103,8 @@ public class ChatInputListener implements Listener {
                 case "PARTICLE" -> CinematicAction.ActionType.PARTICLE;
                 case "TITLE" -> CinematicAction.ActionType.TITLE;
                 case "MESSAGE" -> CinematicAction.ActionType.MESSAGE;
+                case "DIALOGUE" -> CinematicAction.ActionType.DIALOGUE;
+                case "WAIT" -> CinematicAction.ActionType.WAIT;
                 case "COMMAND" -> CinematicAction.ActionType.COMMAND;
                 case "STATE", "STOP" -> CinematicAction.ActionType.ANIMATION;
                 default -> null;
@@ -113,9 +117,18 @@ public class ChatInputListener implements Listener {
                     extra = getMetadata(player, "edit_npc_target");
                     if (context.type.equals("STOP")) val = "STOP:" + message;
                 }
+                if (context.type.equals("WAIT") && (message.equals("-") || message.equalsIgnoreCase("none"))) {
+                    val = "";
+                }
                 data.addAction(targetTick, new CinematicAction(actionType, val, context.loc, extra));
                 plugin.getDataManager().saveCinematic(data);
-                player.sendMessage(lang.getPrefixed(LangKey.MSG_SAVE_SUCCESS));
+                if (context.type.equals("DIALOGUE")) {
+                    player.sendMessage(lang.getPrefixed(LangKey.MSG_DIALOGUE_ADDED));
+                } else if (context.type.equals("WAIT")) {
+                    player.sendMessage(lang.getPrefixed(LangKey.MSG_WAIT_ADDED));
+                } else {
+                    player.sendMessage(lang.getPrefixed(LangKey.MSG_SAVE_SUCCESS));
+                }
             }
             plugin.getGuiManager().openStudioGUI(player, targetId, targetTick / 180);
         });

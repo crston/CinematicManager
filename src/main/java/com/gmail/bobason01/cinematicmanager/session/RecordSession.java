@@ -4,6 +4,7 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -21,7 +22,7 @@ public class RecordSession {
     private final CinematicAction.ActionType recordType;
     private final String targetSlot;
     private final List<Location> recordedPath;
-    private final Location recordOrigin; // 기준점
+    private final Location recordOrigin;
     private boolean isRecording;
 
     public RecordSession(CinematicManager plugin, Player player, String cinematicId, int startTick, CinematicAction.ActionType recordType, String targetSlot) {
@@ -33,21 +34,22 @@ public class RecordSession {
         this.targetSlot = targetSlot;
         this.recordedPath = new ArrayList<>();
 
-        // [핵심] 기준점을 플레이어 위치가 아닌, 소환된 액션의 위치에서 가져옴
         CinematicData data = plugin.getDataManager().getCinematic(cinematicId);
         Location origin = null;
         if (data != null && targetSlot != null) {
+            String targetKey = sanitize(targetSlot);
             for (List<CinematicAction> actions : data.getTimeline().values()) {
                 for (CinematicAction action : actions) {
-                    if (action.getType() == CinematicAction.ActionType.SPAWN_NPC && action.getValue().equals(targetSlot)) {
+                    if (action.getType() == CinematicAction.ActionType.SPAWN_NPC
+                            && sanitize(action.getValue()).equals(targetKey)) {
                         origin = action.getLocation();
                         break;
                     }
                 }
+                if (origin != null) break;
             }
         }
 
-        // 소환 위치를 못 찾으면 현재 플레이어 위치를 기준점으로 (fallback)
         this.recordOrigin = (origin != null) ? origin.clone() : player.getLocation().clone();
         this.isRecording = false;
     }
@@ -57,8 +59,6 @@ public class RecordSession {
         isRecording = true;
 
         player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_RECORD_START));
-
-        // 녹화 시작 시 플레이어를 기준점으로 텔레포트 시켜서 오차 방지
         player.teleport(recordOrigin);
 
         new BukkitRunnable() {
@@ -76,12 +76,15 @@ public class RecordSession {
                 }
 
                 Location current = player.getLocation();
-                Location relative = current.clone();
-                // 기준점(소환 위치)으로부터의 상대적 거리 기록
-                relative.setX(current.getX() - recordOrigin.getX());
-                relative.setY(current.getY() - recordOrigin.getY());
-                relative.setZ(current.getZ() - recordOrigin.getZ());
-
+                // 월드 없는 상대 좌표로 저장 (재생 시 origin + offset)
+                Location relative = new Location(
+                        null,
+                        current.getX() - recordOrigin.getX(),
+                        current.getY() - recordOrigin.getY(),
+                        current.getZ() - recordOrigin.getZ(),
+                        current.getYaw(),
+                        current.getPitch()
+                );
                 recordedPath.add(relative);
             }
         }.runTaskTimer(plugin, 0L, 1L);
@@ -93,7 +96,6 @@ public class RecordSession {
 
         String recordId = UUID.randomUUID().toString().substring(0, 8);
         CinematicData data = plugin.getDataManager().getCinematic(cinematicId);
-
         if (data == null) return;
 
         data.addPathRecord(recordId, recordedPath);
@@ -113,5 +115,10 @@ public class RecordSession {
                 plugin.getGuiManager().openStudioGUI(player, cinematicId, startTick / 180);
             }
         }.runTask(plugin);
+    }
+
+    private String sanitize(String id) {
+        if (id == null) return "";
+        return ChatColor.stripColor(id).toLowerCase().trim();
     }
 }

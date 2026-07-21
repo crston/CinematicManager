@@ -1,0 +1,41 @@
+cinematic_dialogue_layout:
+  # 배경은 첫 줄에만 (tall 9-slice). 2~4줄은 같은 상자 안에 겹침.
+  texts:
+    1:
+      name: cinematic_dialogue_font
+      pattern: "<#FFFFFF>[cinematic:l1]"
+      x: 0
+      y: -72
+      scale: 1.0
+      align: center
+      outline: true
+      layer: 5
+      background: cinematic_box
+      background-scale: 1.0
+    2:
+      name: cinematic_dialogue_font
+      pattern: "<#FFFFFF>[cinematic:l2]"
+      x: 0
+      y: -56
+      scale: 1.0
+      align: center
+      outline: true
+      layer: 5
+    3:
+      name: cinematic_dialogue_font
+      pattern: "<#FFFFFF>[cinematic:l3]"
+      x: 0
+      y: -42
+      scale: 1.0
+      align: center
+      outline: true
+      layer: 5
+    4:
+      name: cinematic_dialogue_font
+      pattern: "<#FFFFFF>[cinematic:l4]"
+      x: 0
+      y: -28
+      scale: 1.0
+      align: center
+      outline: true
+      layer: 5

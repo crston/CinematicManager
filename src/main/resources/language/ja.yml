@@ -139,6 +139,15 @@ menu:
   effect_lightning_lore:
     - "&7現在地に演出用の雷を"
     - "&7召喚します。"
+  effect_dialogue: "&b&lセリフ / 字幕"
+  effect_dialogue_lore:
+    - "&7ページは || で区切ります。"
+    - "&7形式: 話者;セリフ||話者;セリフ"
+    - "&7再生中は右クリックで進めます。"
+  effect_wait: "&7&l入力待ち"
+  effect_wait_lore:
+    - "&7再生を一時停止し"
+    - "&7右クリックされるまで待ちます。"
   effect_back: "&7戻る"
 
 msg:
@@ -155,6 +164,8 @@ msg:
   input_particle: "&e表示するパーティクル名を入力してください。"
   input_title: "&eタイトルを入力してください (メイン;サブ)"
   input_message: "&eメッセージを入力してください。"
+  input_dialogue: "&eセリフを入力してください。ページは || 、改行は \\n (話者;セリフ\\n2行目||次;セリフ)"
+  input_wait: "&e待機中に表示する文字を入力してください (- で空表示)"
   input_command: "&e実行するコマンドを入力してください (#はコンソール実行)"
   input_animation: "&e実行する動作コードを入力してください。"
   input_anim_stop: "&e停止する動作コードを入力してください。"
@@ -165,10 +176,14 @@ msg:
   record_start: "&c&l● &f録画中... &7(SHIFTキーで完了)"
   record_end: "&a&l✔ &f録画が完了しました！"
   lightning_added: "&e現在の位置に演出用の雷が追加されました。"
+  dialogue_added: "&bセリフ/字幕を追加しました。 &7(再生中は右クリックで進行)"
+  wait_added: "&7入力待ちアクションを追加しました。 &7(再生中は右クリックで進行)"
   pause_title: "&e&l視線を回すか移動して&f 続行"
   pause_subtitle: "&e[!] 演出停止中 &8| &f移動: 続行, Shift: スキップ"
   pause_resume: "&a&l▶ &f動きを感知しました。演出を再開します。"
   pause_skip: "&c&l⏹ &fシネマティックをスキップしました。"
+  dialogue_hint_next: "&7[右クリック] 次へ"
+  dialogue_hint_continue: "&7[右クリック] 続ける"
 
 btn:
   camera_static: "&6&l現在の位置で視点固定"

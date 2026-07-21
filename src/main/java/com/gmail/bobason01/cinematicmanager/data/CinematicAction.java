@@ -19,7 +19,9 @@ public class CinematicAction implements Serializable {
         HIDE_ENTITY,
         SHOW_ENTITY,
         ANIMATION,
-        LIGHTNING // [추가] 번개 효과
+        LIGHTNING,
+        DIALOGUE,
+        WAIT
     }
 
     public enum TrackType { ACTION, CAMERA, EFFECT }
@@ -68,7 +70,7 @@ public class CinematicAction implements Serializable {
         return switch (this.type) {
             case SPAWN_NPC, MOVE_NPC, ANIMATION, HIDE_ENTITY, SHOW_ENTITY -> TrackType.ACTION;
             case CAMERA -> TrackType.CAMERA;
-            case SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING -> TrackType.EFFECT;
+            case SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING, DIALOGUE, WAIT -> TrackType.EFFECT;
         };
     }
 }

@@ -4,11 +4,9 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import org.bukkit.Location;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 public class CinematicControlListener implements Listener {
 
@@ -18,39 +16,26 @@ public class CinematicControlListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        CinematicSession session = plugin.getSessionManager().getSession(player);
+        // 대부분의 이동 이벤트는 세션 없음 → 맵 조회만 하고 즉시 탈출
+        CinematicSession session = plugin.getSessionManager().getSession(event.getPlayer());
+        if (session == null || !session.isPaused() || session.isWaitingForInput()) return;
 
-        if (session != null && session.isPaused()) {
-            Location from = event.getFrom();
-            Location to = event.getTo();
-            if (to == null) return;
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (to == null) return;
 
-            double distSq = from.distanceSquared(to);
-            boolean rotated = Math.abs(from.getYaw() - to.getYaw()) > 0.1 ||
-                    Math.abs(from.getPitch() - to.getPitch()) > 0.1;
-
-            if (distSq > 0.0001 || rotated) {
-                session.setPaused(false);
-                // 다국어 메시지 출력
-                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_PAUSE_RESUME));
-            }
+        // 미세 look 스킵: 블록 이동/유의미한 회전만
+        if (from.getBlockX() == to.getBlockX()
+                && from.getBlockY() == to.getBlockY()
+                && from.getBlockZ() == to.getBlockZ()
+                && Math.abs(from.getYaw() - to.getYaw()) < 1.0
+                && Math.abs(from.getPitch() - to.getPitch()) < 1.0) {
+            return;
         }
-    }
 
-    @EventHandler
-    public void onSneak(PlayerToggleSneakEvent event) {
-        if (!event.isSneaking()) return;
-
-        Player player = event.getPlayer();
-        CinematicSession session = plugin.getSessionManager().getSession(player);
-
-        if (session != null) {
-            session.skip();
-            // 다국어 메시지 출력
-            player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_PAUSE_SKIP));
-        }
+        session.setPaused(false);
+        event.getPlayer().sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_PAUSE_RESUME));
     }
 }

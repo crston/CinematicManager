@@ -1,0 +1,32 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "\uF801": -1,
+        "\uF802": -2,
+        "\uF804": -4,
+        "\uF808": -8,
+        "\uF810": -16,
+        "\uF820": -32,
+        "\uF840": -64,
+        "\uF880": -128,
+        "\uF701": 1,
+        "\uF702": 2,
+        "\uF704": 4,
+        "\uF708": 8,
+        "\uF710": 16,
+        "\uF720": 32,
+        "\uF740": 64,
+        "\uF780": 128
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "cinematicmanager:font/dialogue_panel.png",
+      "ascent": 40,
+      "height": 48,
+      "chars": ["\uE000"]
+    }
+  ]
+}

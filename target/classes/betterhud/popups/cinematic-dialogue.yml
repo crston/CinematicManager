@@ -1,0 +1,13 @@
+cinematic_dialogue:
+  triggers:
+    1:
+      class: custom
+      name: cinematic_dialogue
+  group: cinematic
+  unique: true
+  key-mapping: true
+  x: 50
+  y: 100
+  layouts:
+    1:
+      name: cinematic_dialogue_layout

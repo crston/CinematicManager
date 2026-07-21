@@ -1,20 +1,33 @@
 # CinematicManager Configuration
 
-# Language Settings
-# Available: en, ko
 language: "en"
 
-# Skip Settings
 skip-settings:
-  # Use Shift (Sneak) to skip
   use-shift: true
-  
-  # Use F (Swap Hands) to skip
   use-f: false
-  
-  # Require both keys to skip (Shift + F)
   require-both: false
 
-# Development Settings
+# Dialogue: BetterHud popup 연동 (플러그인 softdepend)
+dialogue:
+  # betterhud | bossbar(폴백)
+  display-mode: betterhud
+  page-separator: "||"
+  click-proxy: true
+
+  typing:
+    enabled: true
+    ticks-per-char: 2
+    click-completes: true
+    sound: ui.button.click
+    volume: 0.35
+    pitch: 1.7
+
+  # 자동 줄바꿈 (시각 폭: 영문 1, 한글/기타 2)
+  wrap:
+    enabled: true
+    # 한 줄 시각 폭 (영문1 / 한글2) — 상자 안(~14~16글자 한글)에 맞춤
+    max-width: 24
+    max-lines: 4
+
 debug-mode: false
 save-path: "data"

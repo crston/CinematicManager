@@ -139,6 +139,15 @@ menu:
   effect_lightning_lore:
     - "&7다른 유저는 볼 수 없는"
     - "&7개인 연출용 번개를 현재 위치에 소환합니다."
+  effect_dialogue: "&b&l대화 / 자막"
+  effect_dialogue_lore:
+    - "&7페이지를 || 로 구분합니다."
+    - "&7형식: 화자;대사||화자;대사"
+    - "&7재생 중 우클릭으로 넘깁니다."
+  effect_wait: "&7&l입력 대기"
+  effect_wait_lore:
+    - "&7재생을 잠시 멈추고"
+    - "&7우클릭할 때까지 대기합니다."
   effect_back: "&7이전으로"
 
 msg:
@@ -155,6 +164,8 @@ msg:
   input_particle: "&e뿌려줄 파티클 이름을 적어주세요."
   input_title: "&e화면에 띄울 문구를 적어주세요 (큰제목;작은제목)"
   input_message: "&e보낼 메시지를 적어주세요."
+  input_dialogue: "&e대화를 입력하세요. 페이지는 || , 줄바꿈은 \\n (화자;대사\\n둘째줄||다음;대사)"
+  input_wait: "&e대기 중 표시할 문구를 입력하세요. (비우려면 - 입력)"
   input_command: "&e실행할 명령어를 적어주세요 (#을 붙이면 콘솔 실행)"
   input_animation: "&e재생할 동작 코드를 적어주세요."
   input_anim_stop: "&e중단할 동작 코드를 적어주세요."
@@ -165,10 +176,14 @@ msg:
   record_start: "&c&l● &f경로 기록 중... &7(SHIFT 키로 완료)"
   record_end: "&a&l✔ &f경로 기록이 완료되었습니다!"
   lightning_added: "&e현재 위치에 연출용 번개가 추가되었습니다."
+  dialogue_added: "&b대화/자막이 추가되었습니다. &7(재생 중 우클릭으로 넘김)"
+  wait_added: "&7입력 대기 액션이 추가되었습니다. &7(재생 중 우클릭으로 진행)"
   pause_title: "&e&l시선을 돌리거나 움직여서&f 계속 진행"
   pause_subtitle: "&e[!] 연출 중지 &8| &f움직임: 진행, Shift: 스킵"
   pause_resume: "&a&l▶ &f움직임이 감지되어 연출을 재개합니다."
   pause_skip: "&c&l⏹ &f시네마틱을 스킵했습니다."
+  dialogue_hint_next: "&7[우클릭] 다음"
+  dialogue_hint_continue: "&7[우클릭] 계속"
 
 btn:
   camera_static: "&6&l현재 위치 시점 고정"

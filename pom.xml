@@ -6,7 +6,7 @@
 
     <groupId>com.gmail.bobason01.cinematicmanager.CinematicManager</groupId>
     <artifactId>CinematicManager</artifactId>
-    <version>4.0</version>
+    <version>10.0</version>
     <packaging>jar</packaging>
 
     <name>CinematicManager</name>
@@ -43,9 +43,24 @@
             </plugin>
         </plugins>
         <resources>
+            <!-- YAML 등만 필터링. PNG는 필터링하면 깨짐 -->
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <excludes>
+                    <exclude>**/*.png</exclude>
+                    <exclude>**/*.ogg</exclude>
+                    <exclude>**/*.mcmeta</exclude>
+                </excludes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <includes>
+                    <include>**/*.png</include>
+                    <include>**/*.ogg</include>
+                    <include>**/*.mcmeta</include>
+                </includes>
             </resource>
         </resources>
     </build>
@@ -55,6 +70,14 @@
             <id>spigotmc-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
+        <repository>
+            <id>codemc-releases</id>
+            <url>https://repo.codemc.io/repository/maven-releases/</url>
+        </repository>
+        <repository>
+            <id>central</id>
+            <url>https://repo1.maven.org/maven2/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -62,6 +85,12 @@
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
             <version>1.21.8-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.retrooper</groupId>
+            <artifactId>packetevents-spigot</artifactId>
+            <version>2.13.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

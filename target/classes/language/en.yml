@@ -139,6 +139,15 @@ menu:
   effect_lightning_lore:
     - "&7Spawn cinematic lightning at"
     - "&7current location (Client-side)."
+  effect_dialogue: "&b&lDialogue / Subtitles"
+  effect_dialogue_lore:
+    - "&7Separate pages with ||"
+    - "&7Format: Speaker;Line||Speaker;Line"
+    - "&7Right-click to advance during playback."
+  effect_wait: "&7&lWait for Input"
+  effect_wait_lore:
+    - "&7Pause playback until"
+    - "&7right-click is pressed."
   effect_back: "&7Back"
 
 msg:
@@ -155,6 +164,8 @@ msg:
   input_particle: "&eEnter the particle name."
   input_title: "&eEnter title text (MainTitle;SubTitle)"
   input_message: "&eEnter the message to send."
+  input_dialogue: "&eEnter dialogue. Pages: || , line break: \\n (Speaker;Line\\nLine2||Next;Line)"
+  input_wait: "&eEnter wait text (use - for empty)."
   input_command: "&eEnter the command (# for console)."
   input_animation: "&eEnter the animation code."
   input_anim_stop: "&eEnter the code to stop."
@@ -165,10 +176,14 @@ msg:
   record_start: "&c&l● &fRecording path... &7(Press SHIFT to finish)"
   record_end: "&a&l✔ &fRecording path completed!"
   lightning_added: "&eCinematic lightning added at current location."
+  dialogue_added: "&bDialogue added. &7(Right-click during playback to advance)"
+  wait_added: "&7Wait-for-input action added. &7(Right-click to continue)"
   pause_title: "&e&lLook around or Move&f to continue"
   pause_subtitle: "&e[!] Playback Paused &8| &fMove: Resume, Shift: Skip"
   pause_resume: "&a&l▶ &fMovement detected. Resuming cinematic."
   pause_skip: "&c&l⏹ &fCinematic skipped."
+  dialogue_hint_next: "&7[Right-Click] Next"
+  dialogue_hint_continue: "&7[Right-Click] Continue"
 
 btn:
   camera_static: "&6&lFix View Here"

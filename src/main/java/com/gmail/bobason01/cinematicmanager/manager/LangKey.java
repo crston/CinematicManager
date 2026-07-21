@@ -108,6 +108,10 @@ public enum LangKey {
     MENU_EFFECT_COMMAND_LORE("menu.effect_command_lore"),
     MENU_EFFECT_LIGHTNING("menu.effect_lightning"),
     MENU_EFFECT_LIGHTNING_LORE("menu.effect_lightning_lore"),
+    MENU_EFFECT_DIALOGUE("menu.effect_dialogue"),
+    MENU_EFFECT_DIALOGUE_LORE("menu.effect_dialogue_lore"),
+    MENU_EFFECT_WAIT("menu.effect_wait"),
+    MENU_EFFECT_WAIT_LORE("menu.effect_wait_lore"),
     MENU_EFFECT_BACK("menu.effect_back"),
 
     // 메시지 관련
@@ -124,6 +128,8 @@ public enum LangKey {
     MSG_INPUT_PARTICLE("msg.input_particle"),
     MSG_INPUT_TITLE("msg.input_title"),
     MSG_INPUT_MESSAGE("msg.input_message"),
+    MSG_INPUT_DIALOGUE("msg.input_dialogue"),
+    MSG_INPUT_WAIT("msg.input_wait"),
     MSG_INPUT_COMMAND("msg.input_command"),
     MSG_INPUT_ANIMATION("msg.input_animation"),
     MSG_INPUT_ANIM_STOP("msg.input_anim_stop"),
@@ -134,6 +140,8 @@ public enum LangKey {
     MSG_RECORD_START("msg.record_start"),
     MSG_RECORD_END("msg.record_end"),
     MSG_LIGHTNING_ADDED("msg.lightning_added"),
+    MSG_DIALOGUE_ADDED("msg.dialogue_added"),
+    MSG_WAIT_ADDED("msg.wait_added"),
 
     BTN_CAMERA_STATIC("btn.camera_static"),
     BTN_CAMERA_RECORD("btn.camera_record"),
@@ -141,7 +149,9 @@ public enum LangKey {
     MSG_PAUSE_TITLE("msg.pause_title"),
     MSG_PAUSE_SUBTITLE("msg.pause_subtitle"),
     MSG_PAUSE_RESUME("msg.pause_resume"),
-    MSG_PAUSE_SKIP("msg.pause_skip");
+    MSG_PAUSE_SKIP("msg.pause_skip"),
+    MSG_DIALOGUE_HINT_NEXT("msg.dialogue_hint_next"),
+    MSG_DIALOGUE_HINT_CONTINUE("msg.dialogue_hint_continue");
 
     private final String path;
 

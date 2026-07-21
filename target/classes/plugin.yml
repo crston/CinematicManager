@@ -1,9 +1,9 @@
 name: CinematicManager
-version: 4.0
+version: 10.0
 main: com.gmail.bobason01.cinematicmanager.CinematicManager
 api-version: 1.21
-depend: [ProtocolLib]
-softdepend: [PlaceholderAPI, MythicMobs, ModelEngine]
+depend: [packetevents]
+softdepend: [PlaceholderAPI, MythicMobs, ModelEngine, BetterHud]
 author: crston
 commands:
   cinematic:

@@ -15,8 +15,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 public class GUIListener implements Listener {
@@ -115,8 +117,10 @@ public class GUIListener implements Listener {
             case 11 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "PARTICLE", t); }
             case 12 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "TITLE", t); }
             case 13 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "MESSAGE", t); }
-            case 15 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "COMMAND", t); }
-            case 16 -> {
+            case 14 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "DIALOGUE", t); }
+            case 15 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "WAIT", t); }
+            case 16 -> { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "COMMAND", t); }
+            case 17 -> {
                 CinematicData d = plugin.getDataManager().getCinematic(id);
                 d.addAction(t, new CinematicAction(CinematicAction.ActionType.LIGHTNING, "lightning", player.getLocation(), null));
                 plugin.getDataManager().saveCinematic(d);
@@ -184,15 +188,68 @@ public class GUIListener implements Listener {
     private void handleNPC(Player player, ItemStack item) {
         String id = getMeta(player, "edit_id"), mode = getMeta(player, "edit_mode");
         int t = getMetaInt(player, "edit_tick"), p = getMetaInt(player, "edit_page");
-        if (item.getType() == Material.DARK_OAK_DOOR) { plugin.getGuiManager().openActionSelectGUI(player, id, t, p); return; }
-        String target = plugin.getLangManager().sanitize(item.getItemMeta().getLore().get(1).split("»")[1].trim());
-        if (mode.equals("MOVE")) { player.closeInventory(); new BukkitRunnable() { @Override public void run() { new RecordSession(plugin, player, id, t, CinematicAction.ActionType.MOVE_NPC, target).start(); } }.runTask(plugin); }
-        else if (mode.equals("STATE") || mode.equals("STOP")) { player.closeInventory(); player.setMetadata("edit_npc_target", new FixedMetadataValue(plugin, target)); plugin.getChatInputListener().startTrackInput(player, id, mode, t); }
-        else {
-            CinematicAction.ActionType ty = mode.contains("HIDE") ? CinematicAction.ActionType.HIDE_ENTITY : (mode.contains("SHOW") ? CinematicAction.ActionType.SHOW_ENTITY : CinematicAction.ActionType.ANIMATION);
+        if (item.getType() == Material.DARK_OAK_DOOR) {
+            plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
+            return;
+        }
+
+        String target = resolveNpcTarget(item);
+        if (target == null || target.isBlank()) {
+            return;
+        }
+
+        if (mode.equals("MOVE")) {
+            player.closeInventory();
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    new RecordSession(plugin, player, id, t, CinematicAction.ActionType.MOVE_NPC, target).start();
+                }
+            }.runTask(plugin);
+        } else if (mode.equals("STATE") || mode.equals("STOP")) {
+            player.closeInventory();
+            player.setMetadata("edit_npc_target", new FixedMetadataValue(plugin, target));
+            plugin.getChatInputListener().startTrackInput(player, id, mode, t);
+        } else {
+            CinematicAction.ActionType ty = mode.contains("HIDE")
+                    ? CinematicAction.ActionType.HIDE_ENTITY
+                    : (mode.contains("SHOW") ? CinematicAction.ActionType.SHOW_ENTITY : CinematicAction.ActionType.ANIMATION);
             plugin.getDataManager().getCinematic(id).addAction(t, new CinematicAction(ty, target, player.getLocation(), null));
             plugin.getGuiManager().openStudioGUI(player, id, p);
         }
+    }
+
+    private String resolveNpcTarget(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return null;
+
+        String fromPdc = meta.getPersistentDataContainer().get(
+                plugin.getGuiManager().getNpcTargetKey(),
+                PersistentDataType.STRING
+        );
+        if (fromPdc != null && !fromPdc.isBlank()) {
+            return fromPdc;
+        }
+
+        // 구버전 아이템 폴백: lore 마지막 "»" 줄에서 ID 추출
+        if (meta.hasLore() && meta.getLore() != null) {
+            for (int i = meta.getLore().size() - 1; i >= 0; i--) {
+                String line = plugin.getLangManager().sanitize(meta.getLore().get(i));
+                if (line.contains("»")) {
+                    String[] parts = line.split("»", 2);
+                    if (parts.length > 1) {
+                        String candidate = parts[1].trim();
+                        if (!candidate.isEmpty()
+                                && !candidate.equals("이 개체 선택")
+                                && !candidate.equalsIgnoreCase("Select this entity")
+                                && !candidate.equals("この個体を選択")) {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private void sendCamBtns(Player p, String id, int t) {

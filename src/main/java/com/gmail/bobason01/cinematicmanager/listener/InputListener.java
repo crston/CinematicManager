@@ -1,10 +1,12 @@
 package com.gmail.bobason01.cinematicmanager.listener;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
+import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
@@ -15,20 +17,25 @@ import java.util.UUID;
 
 public class InputListener implements Listener {
 
+    private static final long ADVANCE_COOLDOWN_MS = 250L;
+
     private final CinematicManager plugin;
     private final Map<UUID, Long> shiftPressTime;
     private final Map<UUID, Long> fPressTime;
+    private final Map<UUID, Long> advanceCooldown;
 
     public InputListener(CinematicManager plugin) {
         this.plugin = plugin;
         this.shiftPressTime = new HashMap<>();
         this.fPressTime = new HashMap<>();
+        this.advanceCooldown = new HashMap<>();
     }
 
     @EventHandler
     public void onSneak(PlayerToggleSneakEvent event) {
         Player player = event.getPlayer();
-        if (!plugin.getSessionManager().isPlaying(player)) {
+        CinematicSession session = plugin.getSessionManager().getSession(player);
+        if (session == null || !session.isActive()) {
             return;
         }
 
@@ -45,11 +52,17 @@ public class InputListener implements Listener {
     @EventHandler
     public void onSwapHand(PlayerSwapHandItemsEvent event) {
         Player player = event.getPlayer();
-        if (!plugin.getSessionManager().isPlaying(player)) {
+        CinematicSession session = plugin.getSessionManager().getSession(player);
+        if (session == null || !session.isActive()) {
             return;
         }
 
         event.setCancelled(true);
+
+        if (session.isWaitingForInput()) {
+            return;
+        }
+
         fPressTime.put(player.getUniqueId(), System.currentTimeMillis());
         checkSkipCondition(player);
     }
@@ -57,16 +70,48 @@ public class InputListener implements Listener {
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
-        if (plugin.getSessionManager().isPlaying(player)) {
-            event.setCancelled(true);
+        CinematicSession session = plugin.getSessionManager().getSession(player);
+        if (session == null || !session.isActive()) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (!session.isWaitingForInput()) {
+            return;
+        }
+
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+
+        if (action == Action.RIGHT_CLICK_BLOCK
+                && event.getClickedBlock() != null
+                && !session.isClickProxy(event.getClickedBlock().getLocation())) {
+            return;
+        }
+
+        tryAdvance(player, session);
+    }
+
+    private void tryAdvance(Player player, CinematicSession session) {
+        UUID uuid = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Long last = advanceCooldown.get(uuid);
+        if (last != null && now - last < ADVANCE_COOLDOWN_MS) {
+            return;
+        }
+        if (session.advanceDialogue()) {
+            advanceCooldown.put(uuid, now);
+            fPressTime.remove(uuid);
         }
     }
 
     private void checkSkipCondition(Player player) {
-        // 에러 해결: ConfigManager 대신 성능이 더 빠르고 직관적인 Bukkit 기본 API를 직접 호출
-        boolean requireBoth = plugin.getConfig().getBoolean("skip.require_both", false);
-        boolean useShift = plugin.getConfig().getBoolean("skip.use_shift", true);
-        boolean useF = plugin.getConfig().getBoolean("skip.use_f", true);
+        boolean requireBoth = plugin.getConfig().getBoolean("skip-settings.require-both", false);
+        boolean useShift = plugin.getConfig().getBoolean("skip-settings.use-shift", true);
+        boolean useF = plugin.getConfig().getBoolean("skip-settings.use-f", false);
 
         UUID uuid = player.getUniqueId();
         boolean shiftPressed = shiftPressTime.containsKey(uuid);
@@ -97,6 +142,7 @@ public class InputListener implements Listener {
             CinematicSession session = plugin.getSessionManager().getSession(player);
             if (session != null) {
                 session.skip();
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_PAUSE_SKIP));
             }
         }
     }

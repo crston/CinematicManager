@@ -1,9 +1,7 @@
 package com.gmail.bobason01.cinematicmanager.manager;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.PacketContainer;
+import com.gmail.bobason01.cinematicmanager.util.PacketHelper;
 import com.ticxo.modelengine.api.ModelEngineAPI;
 import com.ticxo.modelengine.api.model.ActiveModel;
 import com.ticxo.modelengine.api.model.ModeledEntity;
@@ -18,8 +16,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 
 import java.util.Map;
 import java.util.UUID;
@@ -29,9 +28,13 @@ public class CustomNPCManager {
 
     private final CinematicManager plugin;
     private final Map<UUID, Location> lastLocations = new ConcurrentHashMap<>();
+    private final boolean modelEngineEnabled;
+    private final boolean mythicEnabled;
 
     public CustomNPCManager(CinematicManager plugin) {
         this.plugin = plugin;
+        this.modelEngineEnabled = Bukkit.getPluginManager().isPluginEnabled("ModelEngine");
+        this.mythicEnabled = Bukkit.getPluginManager().isPluginEnabled("MythicMobs");
     }
 
     public Entity spawnNPC(Player viewer, Location loc, String type, String name, String skin) {
@@ -63,11 +66,16 @@ public class CustomNPCManager {
     }
 
     public Entity spawnMythicMob(Player viewer, String mobKey, Location loc) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("MythicMobs")) return null;
+        if (!mythicEnabled) return null;
         try {
             Entity entity = MythicBukkit.inst().getAPIHelper().spawnMythicMob(mobKey, loc);
             if (entity != null) {
                 entity.setPersistent(false);
+                entity.setGravity(false);
+                if (entity instanceof LivingEntity living) {
+                    living.setAI(false);
+                    living.setCollidable(false);
+                }
                 hideFromOthers(viewer, entity);
                 return entity;
             }
@@ -76,7 +84,7 @@ public class CustomNPCManager {
     }
 
     public Entity spawnModelEngine(Player viewer, String modelId, Location loc) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("ModelEngine")) return null;
+        if (!modelEngineEnabled) return null;
         try {
             ArmorStand as = createBase(loc);
             ActiveModel model = ModelEngineAPI.createActiveModel(modelId);
@@ -95,49 +103,67 @@ public class CustomNPCManager {
     public void move(Player viewer, Entity entity, Location loc) {
         if (entity == null || !entity.isValid()) return;
 
-        Location lastLoc = lastLocations.get(entity.getUniqueId());
-        // 이동 거리 계산 (부자연스러움 해결을 위해 감도 조정)
-        double distance = lastLoc != null ? loc.distanceSquared(lastLoc) : 0;
-        boolean isMoving = distance > 0.001; // 약 0.03블록 이상의 움직임 감지
+        UUID id = entity.getUniqueId();
+        Location lastLoc = lastLocations.get(id);
+        double dx = 0, dy = 0, dz = 0;
+        boolean rotChanged = true;
+        if (lastLoc != null) {
+            dx = loc.getX() - lastLoc.getX();
+            dy = loc.getY() - lastLoc.getY();
+            dz = loc.getZ() - lastLoc.getZ();
+            rotChanged = loc.getYaw() != lastLoc.getYaw() || loc.getPitch() != lastLoc.getPitch();
+            if (dx * dx + dy * dy + dz * dz < 1.0E-6 && !rotChanged) {
+                return; // 완전 정지 → 패킷/teleport 스킵
+            }
+        }
+        boolean isMoving = (dx * dx + dy * dy + dz * dz) > 0.001;
 
-        // 1. 물리적 위치 갱신
         entity.teleport(loc);
 
-        // 2. ModelEngine 전용 최적화 처리
-        if (Bukkit.getPluginManager().isPluginEnabled("ModelEngine")) {
-            ModeledEntity me = ModelEngineAPI.getModeledEntity(entity.getUniqueId());
+        if (modelEngineEnabled) {
+            ModeledEntity me = ModelEngineAPI.getModeledEntity(id);
             if (me != null) {
                 for (ActiveModel model : me.getModels().values()) {
                     if (isMoving) {
-                        // 'walk' 애니메이션이 있다면 강제 재생 (속도 1.0)
                         if (!model.getAnimationHandler().isPlayingAnimation("walk")) {
                             model.getAnimationHandler().playAnimation("walk", 0.2, 0.2, 1.0, true);
                         }
                     } else {
-                        // 멈췄을 때 즉시 중단이 아니라 자연스럽게 stop
                         model.getAnimationHandler().stopAnimation("walk");
                     }
                 }
             }
         }
 
-        // 3. 패킷 기반 부드러운 이동 전송
-        sendMovePackets(viewer, entity, loc);
-        lastLocations.put(entity.getUniqueId(), loc.clone());
+        // teleport 이미 동기화되므로 추가 패킷은 이동 중에만 (부드러움 보강)
+        if (isMoving) {
+            sendMovePackets(viewer, entity, loc);
+        }
+
+        Location stored = lastLocations.get(id);
+        if (stored == null) {
+            lastLocations.put(id, loc.clone());
+        } else {
+            stored.setWorld(loc.getWorld());
+            stored.setX(loc.getX());
+            stored.setY(loc.getY());
+            stored.setZ(loc.getZ());
+            stored.setYaw(loc.getYaw());
+            stored.setPitch(loc.getPitch());
+        }
     }
 
     public void playAnimation(Player viewer, Entity entity, String anim) {
         if (entity == null || anim == null || !entity.isValid()) return;
         String upper = anim.toUpperCase();
 
-        if (Bukkit.getPluginManager().isPluginEnabled("ModelEngine")) {
+        if (modelEngineEnabled) {
             ModeledEntity me = ModelEngineAPI.getModeledEntity(entity.getUniqueId());
             if (me != null) {
                 for (ActiveModel model : me.getModels().values()) {
                     if (upper.startsWith("STOP:")) {
                         model.getAnimationHandler().stopAnimation(anim.substring(5));
                     } else {
-                        // 극강의 성능을 위해 보간 시간(lerpIn/Out)을 0.1로 고정
                         model.getAnimationHandler().playAnimation(anim, 0.1, 0.1, 1.0, true);
                     }
                 }
@@ -169,28 +195,13 @@ public class CustomNPCManager {
 
     private void sendMovePackets(Player viewer, Entity entity, Location loc) {
         try {
-            // ENTITY_TELEPORT 패킷 사용 (가장 정확한 동기화)
-            PacketContainer tp = ProtocolLibrary.getProtocolManager().createPacket(PacketType.Play.Server.ENTITY_TELEPORT);
-            tp.getIntegers().write(0, entity.getEntityId());
-            tp.getDoubles().write(0, loc.getX()).write(1, loc.getY()).write(2, loc.getZ());
-            tp.getBytes().write(0, (byte) (loc.getYaw() * 256 / 360)).write(1, (byte) (loc.getPitch() * 256 / 360));
-            tp.getBooleans().write(0, false); // OnGround 상태 false로 고정하여 공중 이동 시 어색함 방지
-
-            // 머리 회전 패킷 추가 (ModelEngine의 시선 처리에 필수)
-            PacketContainer head = ProtocolLibrary.getProtocolManager().createPacket(PacketType.Play.Server.ENTITY_HEAD_ROTATION);
-            head.getIntegers().write(0, entity.getEntityId());
-            head.getBytes().write(0, (byte) (loc.getYaw() * 256 / 360));
-
-            ProtocolLibrary.getProtocolManager().sendServerPacket(viewer, tp);
-            ProtocolLibrary.getProtocolManager().sendServerPacket(viewer, head);
+            PacketHelper.sendEntityTeleport(viewer, entity, loc);
         } catch (Exception ignored) {}
     }
 
     private void sendAnimationPacket(Player viewer, Entity entity, int id) {
         try {
-            PacketContainer p = ProtocolLibrary.getProtocolManager().createPacket(PacketType.Play.Server.ANIMATION);
-            p.getIntegers().write(0, entity.getEntityId()).write(1, id);
-            ProtocolLibrary.getProtocolManager().sendServerPacket(viewer, p);
+            PacketHelper.sendEntityAnimation(viewer, entity, id);
         } catch (Exception ignored) {}
     }
 

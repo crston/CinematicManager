@@ -1,0 +1,6 @@
+cinematic_dialogue_font:
+  scale: 16
+  merge-default-bitmap: true
+  use-unifont: true
+  include:
+    - korean
