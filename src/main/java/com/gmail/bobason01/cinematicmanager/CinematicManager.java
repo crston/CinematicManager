@@ -1,7 +1,7 @@
 package com.gmail.bobason01.cinematicmanager;
 
 import com.gmail.bobason01.cinematicmanager.command.CinematicCommand;
-import com.gmail.bobason01.cinematicmanager.hook.BetterHudHook;
+import com.gmail.bobason01.cinematicmanager.hook.DialogueHudHook;
 import com.gmail.bobason01.cinematicmanager.hook.HookManager;
 import com.gmail.bobason01.cinematicmanager.listener.*;
 import com.gmail.bobason01.cinematicmanager.manager.*;
@@ -17,7 +17,7 @@ public class CinematicManager extends JavaPlugin {
     private SessionManager sessionManager;
     private CustomNPCManager npcManager;
     private HookManager hookManager;
-    private BetterHudHook betterHudHook;
+    private DialogueHudHook dialogueHudHook = DialogueHudHook.disabled();
     private GUIManager guiManager;
     private LangManager langManager;
     private ChatInputListener chatInputListener;
@@ -28,11 +28,12 @@ public class CinematicManager extends JavaPlugin {
 
         saveDefaultConfig();
         loadLangFiles();
+        loadAiAuthoringFiles();
 
         this.langManager = new LangManager(this);
         this.configManager = new ConfigManager(this);
         this.hookManager = new HookManager(this);
-        this.betterHudHook = new BetterHudHook(this);
+        this.dialogueHudHook = createDialogueHudHook();
         this.npcManager = new CustomNPCManager(this);
         this.sessionManager = new SessionManager(this);
         this.guiManager = new GUIManager(this);
@@ -50,6 +51,24 @@ public class CinematicManager extends JavaPlugin {
         pm.registerEvents(chatInputListener, this);
         pm.registerEvents(new InputListener(this), this);
         pm.registerEvents(new CinematicControlListener(this), this);
+    }
+
+    private DialogueHudHook createDialogueHudHook() {
+        if (!getServer().getPluginManager().isPluginEnabled("BetterHud")) {
+            getLogger().info("BetterHud not found. Dialogue will use the built-in bossbar renderer.");
+            return DialogueHudHook.disabled();
+        }
+        try {
+            Class<?> type = Class.forName(
+                    "com.gmail.bobason01.cinematicmanager.hook.BetterHudHook",
+                    true,
+                    getClassLoader());
+            return (DialogueHudHook) type.getConstructor(CinematicManager.class).newInstance(this);
+        } catch (Throwable error) {
+            getLogger().warning("BetterHud integration could not start; using bossbar dialogue: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
+            return DialogueHudHook.disabled();
+        }
     }
 
     private void registerCommands() {
@@ -76,10 +95,24 @@ public class CinematicManager extends JavaPlugin {
         }
     }
 
+    private void loadAiAuthoringFiles() {
+        for (String resource : new String[]{
+                "ai/README.md", "ai/cinematic.schema.json", "ai/example.yml"}) {
+            File file = new File(getDataFolder(), resource);
+            if (!file.exists()) {
+                try {
+                    saveResource(resource, false);
+                } catch (IllegalArgumentException exception) {
+                    getLogger().warning("Missing AI authoring resource: " + resource);
+                }
+            }
+        }
+    }
+
     @Override
     public void onDisable() {
         if (sessionManager != null) {
-            sessionManager.stopAll();
+            sessionManager.shutdown();
         }
         if (configManager != null) {
             configManager.saveAll();
@@ -111,8 +144,8 @@ public class CinematicManager extends JavaPlugin {
         return hookManager;
     }
 
-    public BetterHudHook getBetterHudHook() {
-        return betterHudHook;
+    public DialogueHudHook getBetterHudHook() {
+        return dialogueHudHook;
     }
 
     public GUIManager getGuiManager() {

@@ -38,7 +38,13 @@ public class CustomNPCManager {
     }
 
     public Entity spawnNPC(Player viewer, Location loc, String type, String name, String skin) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LibsDisguises")) {
+            plugin.getLogger().warning("Cannot spawn cinematic NPC: LibsDisguises is not enabled.");
+            return null;
+        }
         ArmorStand as = createBase(loc);
+        // LibsDisguises owns the visible metadata for vanilla cinematic NPCs.
+        as.setInvisible(false);
         Disguise disguise;
 
         if (type.equalsIgnoreCase("PLAYER")) {
@@ -61,6 +67,7 @@ public class CustomNPCManager {
         }
 
         DisguiseAPI.disguiseToPlayers(as, disguise, viewer);
+        viewer.showEntity(plugin, as);
         hideFromOthers(viewer, as);
         return as;
     }
@@ -85,18 +92,26 @@ public class CustomNPCManager {
 
     public Entity spawnModelEngine(Player viewer, String modelId, Location loc) {
         if (!modelEngineEnabled) return null;
+        ArmorStand as = null;
         try {
-            ArmorStand as = createBase(loc);
+            as = createBase(loc);
             ActiveModel model = ModelEngineAPI.createActiveModel(modelId);
-            if (model != null) {
-                ModeledEntity me = ModelEngineAPI.getOrCreateModeledEntity(as);
-                me.addModel(model, true);
-                // 모델 엔진의 부드러운 회전을 위해 베이스 엔티티 설정 최적화
-                me.setBaseEntityVisible(false);
-                hideFromOthers(viewer, as);
-                return as;
+            if (model == null) {
+                plugin.getLogger().warning("ModelEngine model not found: " + modelId);
+                as.remove();
+                return null;
             }
-        } catch (Exception ignored) {}
+            ModeledEntity me = ModelEngineAPI.getOrCreateModeledEntity(as);
+            me.addModel(model, true);
+            // 모델 엔진의 부드러운 회전을 위해 베이스 엔티티 설정 최적화
+            me.setBaseEntityVisible(false);
+            hideFromOthers(viewer, as);
+            return as;
+        } catch (Exception exception) {
+            if (as != null) as.remove();
+            plugin.getLogger().warning("ModelEngine spawn failed for '" + modelId
+                    + "': " + exception.getMessage());
+        }
         return null;
     }
 
@@ -133,11 +148,6 @@ public class CustomNPCManager {
                     }
                 }
             }
-        }
-
-        // teleport 이미 동기화되므로 추가 패킷은 이동 중에만 (부드러움 보강)
-        if (isMoving) {
-            sendMovePackets(viewer, entity, loc);
         }
 
         Location stored = lastLocations.get(id);
@@ -193,12 +203,6 @@ public class CustomNPCManager {
         }
     }
 
-    private void sendMovePackets(Player viewer, Entity entity, Location loc) {
-        try {
-            PacketHelper.sendEntityTeleport(viewer, entity, loc);
-        } catch (Exception ignored) {}
-    }
-
     private void sendAnimationPacket(Player viewer, Entity entity, int id) {
         try {
             PacketHelper.sendEntityAnimation(viewer, entity, id);
@@ -208,7 +212,10 @@ public class CustomNPCManager {
     private ArmorStand createBase(Location loc) {
         return loc.getWorld().spawn(loc, ArmorStand.class, entity -> {
             entity.setMarker(true);
+            // ModelEngine/Mythic bases must stay hidden. spawnNPC explicitly
+            // enables this only for a LibsDisguises-backed vanilla NPC.
             entity.setInvisible(true);
+            entity.setInvulnerable(true);
             entity.setPersistent(false);
             entity.setGravity(false);
             entity.setBasePlate(false);

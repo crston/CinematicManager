@@ -16,8 +16,7 @@ import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.event.player.PlayerMoveEvent;
 
 import java.util.*;
 import org.bukkit.block.data.BlockData;
@@ -32,9 +31,10 @@ public class CinematicSession {
     private boolean paused = false;
     private boolean waitingForInput = false;
     private boolean hasPapi = false;
-    private BukkitTask ticker;
     private int currentTick = 0;
     private int maxTick = 0;
+    private final ScheduledActions[] schedule;
+    private int scheduleIndex = 0;
 
     private Location originLocation;
     private GameMode originalGameMode;
@@ -46,7 +46,7 @@ public class CinematicSession {
     private Location staticCameraLoc = null;
     private boolean staticCameraApplied = false;
     /** 카메라 경로: absolute 전부 생성하지 않고 relative + origin + scratch */
-    private List<Location> cameraRelative = null;
+    private Location[] cameraRelative = null;
     private Location cameraOrigin = null;
     private final Location cameraScratch = new Location(null, 0, 0, 0);
     private int cameraStep = 0;
@@ -57,6 +57,7 @@ public class CinematicSession {
 
     /** 시청자 시야 방향 앞 1블록에만 보이는 개인 페이크 블록 */
     private Location clickProxyBlock = null;
+    private final Location clickProxyScratch = new Location(null, 0, 0, 0);
     private static final BlockData BARRIER_DATA = Material.BARRIER.createBlockData();
     private boolean clickProxyEnabled = true;
 
@@ -72,6 +73,7 @@ public class CinematicSession {
     private int dialogueTypedChars = 0;
     private int dialogueTypeTick = 0;
     private boolean dialogueTyping = false;
+    private long lastDialogueAdvanceNanos = 0L;
     private BossBar dialogueBossBar;
     private boolean betterHudMode = false;
 
@@ -91,6 +93,7 @@ public class CinematicSession {
         this.player = player;
         this.data = data;
         this.hasPapi = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
+        this.schedule = compileSchedule(data);
     }
 
     public void start() {
@@ -98,14 +101,18 @@ public class CinematicSession {
         this.active = true;
         this.originLocation = player.getLocation().clone();
         this.originalGameMode = player.getGameMode();
-        this.maxTick = data.getLastTick();
+        this.maxTick = schedule.length == 0 ? 0 : schedule[schedule.length - 1].tick;
         this.currentTick = 0;
+        this.scheduleIndex = 0;
         this.clickProxyEnabled = plugin.getConfig().getBoolean("dialogue.click-proxy", true);
         cacheTypingConfig();
         this.betterHudMode = plugin.getBetterHudHook() != null && plugin.getBetterHudHook().isEnabled();
 
         player.setGameMode(GameMode.SPECTATOR);
-        runTicker();
+        Location cinematicOrigin = data.getOrigin();
+        if (cinematicOrigin != null && cinematicOrigin.getWorld() != null) {
+            player.teleport(cinematicOrigin);
+        }
     }
 
     private void cacheTypingConfig() {
@@ -117,52 +124,65 @@ public class CinematicSession {
         typingPitch = (float) plugin.getConfig().getDouble("dialogue.typing.pitch", 1.7);
     }
 
-    private void runTicker() {
-        this.ticker = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!active || !player.isOnline()) { stop(); return; }
+    /**
+     * Called by SessionManager's single server-tick task.
+     */
+    public void tick() {
+        if (!active) return;
+        if (!player.isOnline()) {
+            stop();
+            return;
+        }
 
-                // 대화/대기 중: 타임라인·이동·카메라 전부 정지 (타이핑/클릭만)
+        // 대화/대기 중: 타임라인·이동·카메라 전부 정지 (타이핑/클릭만)
+        if (waitingForInput) {
+            updateClickProxy();
+            tickDialogueTyping();
+            return;
+        }
+        if (paused) return;
+
+        boolean cameraUpdated = handleCameraPlayback();
+
+        if (scheduleIndex < schedule.length && schedule[scheduleIndex].tick == currentTick) {
+            List<CinematicAction> actions = schedule[scheduleIndex++].actions;
+            boolean deferRest = false;
+            for (CinematicAction action : actions) {
+                if (deferRest) {
+                    deferredActions.addLast(action);
+                    continue;
+                }
+                processAction(action);
+                if (!active) return;
                 if (waitingForInput) {
-                    updateClickProxy();
-                    tickDialogueTyping();
-                    return;
+                    deferRest = true;
                 }
-                if (paused) return;
-
-                handleCameraPlayback();
-
-                List<CinematicAction> actions = data.getTimeline().get(currentTick);
-                if (actions != null) {
-                    boolean deferRest = false;
-                    for (CinematicAction action : actions) {
-                        if (deferRest) {
-                            deferredActions.addLast(action);
-                            continue;
-                        }
-                        processAction(action);
-                        if (waitingForInput) {
-                            deferRest = true;
-                        }
-                    }
-                }
-
-                updateNpcMovements();
-
-                // 이번 틱에서 대화에 들어갔으면 틱만 소모하고 멈춤 (재트리거 방지)
-                if (waitingForInput) {
-                    currentTick++;
-                    return;
-                }
-
-                if (currentTick > maxTick && movingNpcs.isEmpty()) {
-                    stop();
-                    return;
-                }
-                currentTick++;
             }
-        }.runTaskTimer(plugin, 0L, 1L);
+        }
+
+        updateNpcMovements();
+        if (!active) return;
+
+        // 이번 틱에서 대화에 들어갔으면 틱만 소모하고 멈춤 (재트리거 방지)
+        if (waitingForInput) {
+            currentTick++;
+            return;
+        }
+
+        if (currentTick > maxTick && movingNpcs.isEmpty() && cameraRelative == null
+                && !cameraUpdated) {
+            stop();
+            return;
+        }
+        currentTick++;
+    }
+
+    private static ScheduledActions[] compileSchedule(CinematicData data) {
+        if (data == null || data.getTimeline().isEmpty()) return new ScheduledActions[0];
+        return data.getTimeline().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new ScheduledActions(entry.getKey(), List.copyOf(entry.getValue())))
+                .toArray(ScheduledActions[]::new);
     }
 
     public void setPaused(boolean paused) {
@@ -187,6 +207,9 @@ public class CinematicSession {
      */
     public boolean advanceDialogue() {
         if (!waitingForInput) return false;
+        long now = System.nanoTime();
+        if (now - lastDialogueAdvanceNanos < 250_000_000L) return false;
+        lastDialogueAdvanceNanos = now;
 
         if (dialogueTyping && plugin.getConfig().getBoolean("dialogue.typing.click-completes", true)) {
             completeDialogueTyping();
@@ -205,14 +228,23 @@ public class CinematicSession {
         return true;
     }
 
-    /** 클릭 대상이 이 세션의 개인 페이크 블록인지 */
-    public boolean isClickProxy(Location loc) {
-        if (loc == null || clickProxyBlock == null) return false;
-        return clickProxyBlock.getWorld() != null
-                && clickProxyBlock.getWorld().equals(loc.getWorld())
-                && clickProxyBlock.getBlockX() == loc.getBlockX()
-                && clickProxyBlock.getBlockY() == loc.getBlockY()
-                && clickProxyBlock.getBlockZ() == loc.getBlockZ();
+    /**
+     * Keep a static camera truly fixed without sending a teleport every tick.
+     * A packet is only produced when the player actually tries to move/look.
+     */
+    public boolean enforceStaticCamera(PlayerMoveEvent event) {
+        if (!active || staticCameraLoc == null || event.getTo() == null) return false;
+        Location to = event.getTo();
+        if (to.getWorld() == staticCameraLoc.getWorld()
+                && Math.abs(to.getX() - staticCameraLoc.getX()) < 1.0E-6
+                && Math.abs(to.getY() - staticCameraLoc.getY()) < 1.0E-6
+                && Math.abs(to.getZ() - staticCameraLoc.getZ()) < 1.0E-6
+                && Math.abs(to.getYaw() - staticCameraLoc.getYaw()) < 0.01f
+                && Math.abs(to.getPitch() - staticCameraLoc.getPitch()) < 0.01f) {
+            return false;
+        }
+        event.setTo(staticCameraLoc.clone());
+        return true;
     }
 
     private void processAction(CinematicAction action) {
@@ -247,23 +279,22 @@ public class CinematicSession {
     }
 
     private void handleSpawn(CinematicAction action) {
-        String spawnName = action.getValue();
-        if (hasPapi) spawnName = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, spawnName);
+        String spawnName = color(resolvePlaceholders(action.getValue()));
         Location loc = action.getLocation();
         Entity npc = null;
         String lower = spawnName.toLowerCase();
-        if (lower.contains("npc:")) {
-            String val = spawnName.substring(lower.indexOf("npc:") + 4);
+        if (lower.startsWith("npc:")) {
+            String val = spawnName.substring(4);
             String[] split = val.split(":");
             String type = "PLAYER", name = split[0], skin = split.length > 1 ? split[1] : split[0];
             if (split.length >= 2 && isEntityType(split[0])) {
                 type = split[0]; name = split[1]; skin = split.length > 2 ? split[2] : name;
             }
             npc = plugin.getNpcManager().spawnNPC(player, loc, type, name, skin);
-        } else if (lower.contains("mythicmobs:")) {
-            npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(lower.indexOf("mythicmobs:") + 11).trim(), loc);
-        } else if (lower.contains("modelengine:")) {
-            npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(lower.indexOf("modelengine:") + 12).trim(), loc);
+        } else if (lower.startsWith("mythicmobs:")) {
+            npc = plugin.getNpcManager().spawnMythicMob(player, spawnName.substring(11).trim(), loc);
+        } else if (lower.startsWith("modelengine:")) {
+            npc = plugin.getNpcManager().spawnModelEngine(player, spawnName.substring(12).trim(), loc);
         }
         if (npc != null) {
             String key = sanitize(action.getValue());
@@ -303,7 +334,7 @@ public class CinematicSession {
             }
         }
 
-        ActivePath path = new ActivePath(relativePath, origin.clone());
+        ActivePath path = new ActivePath(relativePath.toArray(Location[]::new), origin.clone());
         path.entity = entity;
         movingNpcs.put(targetKey, path);
     }
@@ -314,10 +345,14 @@ public class CinematicSession {
             this.staticCameraApplied = false;
             this.cameraRelative = null;
             this.cameraOrigin = null;
+            if (staticCameraLoc != null) {
+                player.teleport(staticCameraLoc);
+                staticCameraApplied = true;
+            }
         } else {
             List<Location> relativePath = data.getPathRecord(action.getValue());
             if (relativePath != null) {
-                this.cameraRelative = relativePath;
+                this.cameraRelative = relativePath.toArray(Location[]::new);
                 this.cameraOrigin = action.getLocation();
                 this.cameraStep = 0;
                 this.staticCameraLoc = null;
@@ -326,17 +361,18 @@ public class CinematicSession {
         }
     }
 
-    private void handleCameraPlayback() {
+    private boolean handleCameraPlayback() {
         if (staticCameraLoc != null) {
             // 정적 카메라: 최초 1회만 teleport (매 틱 금지)
             if (!staticCameraApplied) {
                 player.teleport(staticCameraLoc);
                 staticCameraApplied = true;
+                return true;
             }
-            return;
+            return false;
         }
-        if (cameraRelative != null && cameraOrigin != null && cameraStep < cameraRelative.size()) {
-            Location rel = cameraRelative.get(cameraStep++);
+        if (cameraRelative != null && cameraOrigin != null && cameraStep < cameraRelative.length) {
+            Location rel = cameraRelative[cameraStep++];
             cameraScratch.setWorld(cameraOrigin.getWorld());
             cameraScratch.setX(cameraOrigin.getX() + rel.getX());
             cameraScratch.setY(cameraOrigin.getY() + rel.getY());
@@ -344,7 +380,13 @@ public class CinematicSession {
             cameraScratch.setYaw(rel.getYaw());
             cameraScratch.setPitch(rel.getPitch());
             player.teleport(cameraScratch);
+            return true;
         }
+        if (cameraRelative != null && cameraStep >= cameraRelative.length) {
+            cameraRelative = null;
+            cameraOrigin = null;
+        }
+        return false;
     }
 
     private void updateNpcMovements() {
@@ -357,11 +399,11 @@ public class CinematicSession {
                 entity = findEntity(entry.getKey());
                 path.entity = entity;
             }
-            if (entity == null || !entity.isValid() || path.step >= path.relativeLocations.size()) {
+            if (entity == null || !entity.isValid() || path.step >= path.relativeLocations.length) {
                 it.remove();
                 continue;
             }
-            Location rel = path.relativeLocations.get(path.step++);
+            Location rel = path.relativeLocations[path.step++];
             Location scratch = path.scratch;
             scratch.setWorld(path.baseOrigin.getWorld());
             scratch.setX(path.baseOrigin.getX() + rel.getX());
@@ -370,21 +412,20 @@ public class CinematicSession {
             scratch.setYaw(rel.getYaw());
             scratch.setPitch(rel.getPitch());
             plugin.getNpcManager().move(player, entity, scratch);
+            if (!active) return;
         }
     }
 
     private void handleAnimation(CinematicAction action) {
         Entity e = findEntity(action.getExtra());
         if (e != null) {
-            String val = action.getValue();
-            if (hasPapi) val = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, val);
+            String val = resolvePlaceholders(action.getValue());
             plugin.getNpcManager().playAnimation(player, e, val);
         }
     }
 
     private void handleCommand(CinematicAction action) {
-        String cmd = action.getValue().replace("%player%", player.getName());
-        if (hasPapi) cmd = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, cmd);
+        String cmd = resolvePlaceholders(action.getValue());
         if (cmd.startsWith("#")) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.substring(1).trim());
         else player.performCommand(cmd.startsWith("/") ? cmd.substring(1) : cmd);
     }
@@ -398,21 +439,17 @@ public class CinematicSession {
     }
 
     private void handleTitle(CinematicAction action) {
-        String raw = action.getValue();
-        if (hasPapi) raw = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, raw);
+        String raw = resolvePlaceholders(action.getValue());
         String[] split = raw.split(";", 2);
-        player.sendTitle(split[0].replace("&", "§"), split.length > 1 ? split[1].replace("&", "§") : "", 10, 70, 20);
+        player.sendTitle(color(split[0]), split.length > 1 ? color(split[1]) : "", 10, 70, 20);
     }
 
     private void handleMessage(CinematicAction action) {
-        String msg = action.getValue();
-        if (hasPapi) msg = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, msg);
-        player.sendMessage(msg.replace("&", "§"));
+        player.sendMessage(color(resolvePlaceholders(action.getValue())));
     }
 
     private void handleDialogue(CinematicAction action) {
-        String raw = action.getValue() != null ? action.getValue() : "";
-        if (hasPapi) raw = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, raw);
+        String raw = resolvePlaceholders(action.getValue());
 
         String separator = plugin.getConfig().getString("dialogue.page-separator", "||");
         String[] pages = raw.split(java.util.regex.Pattern.quote(separator), -1);
@@ -431,10 +468,7 @@ public class CinematicSession {
     }
 
     private void handleWait(CinematicAction action) {
-        String raw = action.getValue() != null ? action.getValue() : "";
-        if (hasPapi && !raw.isEmpty()) {
-            raw = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, raw);
-        }
+        String raw = resolvePlaceholders(action.getValue());
         dialogueDisplayMode = resolveDisplayMode(action.getExtra());
         dialoguePages = List.of(raw.isBlank() ? " " : raw.trim());
         dialoguePageIndex = 0;
@@ -446,7 +480,8 @@ public class CinematicSession {
     private String resolveDisplayMode(String extra) {
         if (extra != null && !extra.isBlank()) {
             String mode = extra.trim().toLowerCase(Locale.ROOT);
-            if (mode.equals("title") || mode.equals("actionbar") || mode.equals("both")) {
+            if (mode.equals("title") || mode.equals("actionbar") || mode.equals("both")
+                    || mode.equals("betterhud") || mode.equals("bossbar")) {
                 return mode;
             }
         }
@@ -474,7 +509,8 @@ public class CinematicSession {
         dialogueTypedChars = 0;
         dialogueTypeTick = 0;
         dialogueTyping = typingEnabled && dialoguePlainLength > 0;
-        betterHudMode = plugin.getBetterHudHook() != null && plugin.getBetterHudHook().isEnabled();
+        betterHudMode = dialogueDisplayMode.equals("betterhud")
+                && plugin.getBetterHudHook().isEnabled();
 
         // 페이지 시작 때 1회만 클리어
         if (betterHudMode) {
@@ -517,16 +553,27 @@ public class CinematicSession {
 
     private void renderDialogueFrame() {
         if (betterHudMode) {
-            String plainVisible = dialogueTypedChars <= 0
-                    ? ""
-                    : (dialogueTypedChars >= dialoguePlainLength
-                    ? dialogueFullPlain
-                    : dialogueFullPlain.substring(0, dialogueTypedChars));
-            plugin.getBetterHudHook().showDialogue(player, dialogueSpeakerPlain, plainVisible, "");
+            String coloredVisible = visibleTypedText(dialogueFullLine, dialogueTypedChars);
+            plugin.getBetterHudHook().showDialogue(player, legacyForBetterHud(dialogueSpeaker),
+                    legacyForBetterHud(coloredVisible), "");
             return;
         }
 
         String visibleLine = visibleTypedText(dialogueFullLine, dialogueTypedChars);
+
+        if (dialogueDisplayMode.equals("title") || dialogueDisplayMode.equals("both")) {
+            player.sendTitle(dialogueSpeaker, visibleLine, 0, 40, 0);
+        }
+        if (dialogueDisplayMode.equals("actionbar") || dialogueDisplayMode.equals("both")) {
+            String actionBar = dialogueSpeaker.isEmpty()
+                    ? visibleLine : dialogueSpeaker + " §7» §f" + visibleLine;
+            sendActionBar(actionBar);
+        }
+        if (dialogueDisplayMode.equals("title") || dialogueDisplayMode.equals("actionbar")
+                || dialogueDisplayMode.equals("both")) {
+            clearDialogueBossBar();
+            return;
+        }
 
         // 폴백: BetterHud 없을 때 단순 보스바 텍스트
         String body;
@@ -629,7 +676,7 @@ public class CinematicSession {
         sendActionBar("");
     }
     private void drainDeferredActions() {
-        while (!deferredActions.isEmpty() && !waitingForInput) {
+        while (active && !deferredActions.isEmpty() && !waitingForInput) {
             processAction(deferredActions.pollFirst());
         }
     }
@@ -645,13 +692,31 @@ public class CinematicSession {
             return;
         }
 
-        Location eye = player.getEyeLocation();
-        Location next = eye.clone()
-                .add(eye.getDirection().normalize())
-                .getBlock()
-                .getLocation();
+        if (staticCameraLoc != null) {
+            clickProxyScratch.setWorld(staticCameraLoc.getWorld());
+            clickProxyScratch.setX(staticCameraLoc.getX());
+            clickProxyScratch.setY(staticCameraLoc.getY());
+            clickProxyScratch.setZ(staticCameraLoc.getZ());
+            clickProxyScratch.setYaw(staticCameraLoc.getYaw());
+            clickProxyScratch.setPitch(staticCameraLoc.getPitch());
+        } else {
+            player.getLocation(clickProxyScratch);
+        }
+        double yaw = Math.toRadians(clickProxyScratch.getYaw());
+        double pitch = Math.toRadians(clickProxyScratch.getPitch());
+        double horizontal = Math.cos(pitch);
+        double directionX = zeroTiny(-horizontal * Math.sin(yaw));
+        double directionY = zeroTiny(-Math.sin(pitch));
+        double directionZ = zeroTiny(horizontal * Math.cos(yaw));
+        int blockX = floor(clickProxyScratch.getX() + directionX);
+        int blockY = floor(clickProxyScratch.getY() + player.getEyeHeight() + directionY);
+        int blockZ = floor(clickProxyScratch.getZ() + directionZ);
 
-        if (clickProxyBlock != null && sameBlock(clickProxyBlock, next)) {
+        if (clickProxyBlock != null
+                && clickProxyBlock.getWorld() == clickProxyScratch.getWorld()
+                && clickProxyBlock.getBlockX() == blockX
+                && clickProxyBlock.getBlockY() == blockY
+                && clickProxyBlock.getBlockZ() == blockZ) {
             // 같은 블록이면 패킷 재전송 안 함
             return;
         }
@@ -659,16 +724,24 @@ public class CinematicSession {
         if (clickProxyBlock != null) {
             restoreBlock(clickProxyBlock);
         }
-        clickProxyBlock = next;
+        if (clickProxyBlock == null) {
+            clickProxyBlock = new Location(clickProxyScratch.getWorld(), blockX, blockY, blockZ);
+        } else {
+            clickProxyBlock.setWorld(clickProxyScratch.getWorld());
+            clickProxyBlock.setX(blockX);
+            clickProxyBlock.setY(blockY);
+            clickProxyBlock.setZ(blockZ);
+        }
         player.sendBlockChange(clickProxyBlock, BARRIER_DATA);
     }
 
-    private boolean sameBlock(Location a, Location b) {
-        return a.getWorld() != null
-                && a.getWorld().equals(b.getWorld())
-                && a.getBlockX() == b.getBlockX()
-                && a.getBlockY() == b.getBlockY()
-                && a.getBlockZ() == b.getBlockZ();
+    private static int floor(double value) {
+        int integer = (int) value;
+        return value < integer ? integer - 1 : integer;
+    }
+
+    private static double zeroTiny(double value) {
+        return Math.abs(value) < 1.0E-12 ? 0.0 : value;
     }
 
     private void restoreBlock(Location loc) {
@@ -689,7 +762,19 @@ public class CinematicSession {
 
     private String color(String text) {
         if (text == null) return "";
-        return text.replace("&", "§");
+        return ChatColor.translateAlternateColorCodes('&', text);
+    }
+
+    private String resolvePlaceholders(String text) {
+        String resolved = text == null ? "" : text.replace("%player%", player.getName());
+        if (hasPapi) {
+            resolved = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, resolved);
+        }
+        return resolved;
+    }
+
+    private String legacyForBetterHud(String text) {
+        return text == null ? "" : text.replace('§', '&');
     }
 
     private void handleHide(CinematicAction action) {
@@ -737,7 +822,6 @@ public class CinematicSession {
         if (plugin.getBetterHudHook() != null) {
             plugin.getBetterHudHook().hideDialogue(player);
         }
-        if (ticker != null) ticker.cancel();
         clearClickProxy();
         activeEntities.values().forEach(e -> plugin.getNpcManager().remove(e));
         activeEntities.clear(); movingNpcs.clear(); spawnLocations.clear();
@@ -746,6 +830,9 @@ public class CinematicSession {
             sendActionBar("");
             player.setGameMode(originalGameMode);
             player.teleport(originLocation);
+        } else {
+            plugin.getSessionManager().queuePlayerRestore(
+                    player.getUniqueId(), originalGameMode, originLocation);
         }
 
         // 시네마틱 종료 이벤트 호출
@@ -757,18 +844,37 @@ public class CinematicSession {
 
     public boolean isActive() { return active; }
 
+    public void hideEntitiesFrom(Player joiningPlayer) {
+        if (joiningPlayer == null || joiningPlayer.getUniqueId().equals(player.getUniqueId())) return;
+        for (Entity entity : activeEntities.values()) {
+            if (entity != null && entity.isValid()) {
+                joiningPlayer.hideEntity(plugin, entity);
+            }
+        }
+    }
+
     private static class ActivePath {
-        final List<Location> relativeLocations;
+        final Location[] relativeLocations;
         final Location baseOrigin;
         final Location scratch;
         Entity entity;
         int step;
 
-        ActivePath(List<Location> rl, Location bo) {
+        ActivePath(Location[] rl, Location bo) {
             this.relativeLocations = rl;
             this.baseOrigin = bo;
             this.scratch = new Location(bo.getWorld(), 0, 0, 0);
             this.step = 0;
+        }
+    }
+
+    private static final class ScheduledActions {
+        final int tick;
+        final List<CinematicAction> actions;
+
+        ScheduledActions(int tick, List<CinematicAction> actions) {
+            this.tick = tick;
+            this.actions = actions;
         }
     }
 }

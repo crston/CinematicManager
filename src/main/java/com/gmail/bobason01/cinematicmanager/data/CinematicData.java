@@ -6,14 +6,14 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class CinematicData implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private final String id;
-    private final Map<Integer, List<CinematicAction>> timeline = new ConcurrentHashMap<>();
-    private final Map<String, List<Location>> pathRecords = new ConcurrentHashMap<>();
+    private final Map<Integer, List<CinematicAction>> timeline = new HashMap<>();
+    private final Map<String, List<Location>> pathRecords = new HashMap<>();
+    private Location origin;
 
     public CinematicData(String id) {
         this.id = id;
@@ -22,12 +22,24 @@ public class CinematicData implements Serializable {
     public String getId() { return id; }
     public String getName() { return id; }
 
+    public Location getOrigin() {
+        return origin == null ? null : origin.clone();
+    }
+
+    public void setOrigin(Location origin) {
+        this.origin = origin == null ? null : origin.clone();
+    }
+
     public Map<Integer, List<CinematicAction>> getTimeline() {
         return timeline;
     }
 
     public List<Location> getPathRecord(String recordId) {
         return pathRecords.get(recordId);
+    }
+
+    public Map<String, List<Location>> getPathRecords() {
+        return Collections.unmodifiableMap(pathRecords);
     }
 
     public void addPathRecord(String recordId, List<Location> path) {

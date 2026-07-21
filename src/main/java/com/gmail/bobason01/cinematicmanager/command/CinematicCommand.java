@@ -3,6 +3,8 @@ package com.gmail.bobason01.cinematicmanager.command;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.io.CinematicDefinitionService;
+import com.gmail.bobason01.cinematicmanager.manager.ConfigManager;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import com.gmail.bobason01.cinematicmanager.session.RecordSession;
@@ -14,6 +16,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.util.StringUtil;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,7 +30,8 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
     public CinematicCommand(CinematicManager plugin) {
         this.plugin = plugin;
         // pause 서브 커맨드 추가
-        this.subCommands = Arrays.asList("create", "edit", "play", "pause", "stop", "list", "reload");
+        this.subCommands = Arrays.asList("create", "edit", "play", "pause", "stop", "list",
+                "validate", "import", "export", "reload");
     }
 
     @Override
@@ -72,7 +76,10 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 String id = args[1];
-                plugin.getDataManager().createCinematic(id);
+                if (!plugin.getDataManager().createCinematic(id, player.getLocation())) {
+                    player.sendMessage("§cInvalid id. Use 1-64 letters, numbers, '_' or '-'.");
+                    return true;
+                }
 
                 CinematicData newData = plugin.getDataManager().getCinematic(id);
                 if (newData != null) plugin.getDataManager().saveCinematic(newData);
@@ -153,11 +160,53 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            case "reload": {
-                if (sender instanceof Player && !sender.isOp()) {
-                    sender.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_DELETE_ADMIN));
+            case "validate": {
+                if (!requireAdmin(sender)) return true;
+                if (args.length < 2) {
+                    sender.sendMessage("§eUsage: /" + label + " validate <file.yml>");
+                    sender.sendMessage("§7Place AI-generated files in plugins/CinematicManager/imports/.");
                     return true;
                 }
+                CinematicDefinitionService.LoadResult result =
+                        plugin.getDataManager().validateImport(args[1]);
+                sendDiagnostics(sender, result.diagnostics());
+                sender.sendMessage(result.valid()
+                        ? "§aValidation passed."
+                        : "§cValidation failed with "
+                        + result.diagnostics().stream()
+                        .filter(d -> d.severity() == CinematicDefinitionService.Severity.ERROR)
+                        .count() + " error(s).");
+                return true;
+            }
+
+            case "import": {
+                if (!requireAdmin(sender)) return true;
+                if (args.length < 2) {
+                    sender.sendMessage("§eUsage: /" + label + " import <file.yml> [--replace]");
+                    return true;
+                }
+                boolean replace = args.length >= 3 && "--replace".equalsIgnoreCase(args[2]);
+                ConfigManager.OperationResult result =
+                        plugin.getDataManager().importCinematic(args[1], replace);
+                sendDiagnostics(sender, result.diagnostics());
+                sender.sendMessage((result.success() ? "§a" : "§c") + result.message());
+                return true;
+            }
+
+            case "export": {
+                if (!requireAdmin(sender)) return true;
+                if (args.length < 2) {
+                    sender.sendMessage("§eUsage: /" + label + " export <cinematic-id>");
+                    return true;
+                }
+                ConfigManager.OperationResult result =
+                        plugin.getDataManager().exportCinematic(args[1]);
+                sender.sendMessage((result.success() ? "§a" : "§c") + result.message());
+                return true;
+            }
+
+            case "reload": {
+                if (!requireAdmin(sender)) return true;
 
                 plugin.reloadConfig();
                 plugin.getLangManager().load();
@@ -171,6 +220,22 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean requireAdmin(CommandSender sender) {
+        if (sender.hasPermission("cinematic.admin")) return true;
+        sender.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_DELETE_ADMIN));
+        return false;
+    }
+
+    private void sendDiagnostics(CommandSender sender,
+                                 List<CinematicDefinitionService.Diagnostic> diagnostics) {
+        for (CinematicDefinitionService.Diagnostic diagnostic : diagnostics) {
+            String color = diagnostic.severity() == CinematicDefinitionService.Severity.ERROR
+                    ? "§c" : "§e";
+            sender.sendMessage(color + diagnostic.code() + " §7" + diagnostic.path()
+                    + " §f" + diagnostic.message());
+        }
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         int length = args.length;
@@ -182,9 +247,19 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
         String subCommand = args[0].toLowerCase();
 
         if (length == 2) {
-            if (subCommand.equals("edit") || subCommand.equals("play")) {
+            if (subCommand.equals("edit") || subCommand.equals("play")
+                    || subCommand.equals("export")) {
                 List<String> ids = new ArrayList<>(plugin.getDataManager().getIds());
                 return StringUtil.copyPartialMatches(args[1], ids, new ArrayList<>(ids.size()));
+            }
+            if (subCommand.equals("validate") || subCommand.equals("import")) {
+                File[] files = plugin.getDataManager().getImportFolder()
+                        .listFiles((dir, name) -> name.toLowerCase().endsWith(".yml"));
+                List<String> names = new ArrayList<>();
+                if (files != null) {
+                    for (File file : files) names.add(file.getName());
+                }
+                return StringUtil.copyPartialMatches(args[1], names, new ArrayList<>(names.size()));
             }
             // pause와 stop은 플레이어 이름을 추천
             if (subCommand.equals("stop") || subCommand.equals("pause")) {
@@ -197,6 +272,10 @@ public class CinematicCommand implements CommandExecutor, TabCompleter {
         }
 
         if (length == 3) {
+            if (subCommand.equals("import")) {
+                return StringUtil.copyPartialMatches(args[2], List.of("--replace"),
+                        new ArrayList<>(1));
+            }
             if (subCommand.equals("play")) {
                 List<String> playerNames = new ArrayList<>(Bukkit.getOnlinePlayers().size());
                 for (Player p : Bukkit.getOnlinePlayers()) {

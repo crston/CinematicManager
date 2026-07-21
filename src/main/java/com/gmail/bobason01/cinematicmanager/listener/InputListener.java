@@ -5,9 +5,13 @@ import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.session.CinematicSession;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 
@@ -17,18 +21,14 @@ import java.util.UUID;
 
 public class InputListener implements Listener {
 
-    private static final long ADVANCE_COOLDOWN_MS = 250L;
-
     private final CinematicManager plugin;
     private final Map<UUID, Long> shiftPressTime;
     private final Map<UUID, Long> fPressTime;
-    private final Map<UUID, Long> advanceCooldown;
 
     public InputListener(CinematicManager plugin) {
         this.plugin = plugin;
         this.shiftPressTime = new HashMap<>();
         this.fPressTime = new HashMap<>();
-        this.advanceCooldown = new HashMap<>();
     }
 
     @EventHandler
@@ -86,25 +86,43 @@ public class InputListener implements Listener {
             return;
         }
 
-        if (action == Action.RIGHT_CLICK_BLOCK
-                && event.getClickedBlock() != null
-                && !session.isClickProxy(event.getClickedBlock().getLocation())) {
-            return;
-        }
-
+        // The proxy is a client-only fake block. Bukkit may report the real
+        // server block (often AIR), so coordinate equality is not reliable.
         tryAdvance(player, session);
     }
 
-    private void tryAdvance(Player player, CinematicSession session) {
-        UUID uuid = player.getUniqueId();
-        long now = System.currentTimeMillis();
-        Long last = advanceCooldown.get(uuid);
-        if (last != null && now - last < ADVANCE_COOLDOWN_MS) {
-            return;
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractEntity(PlayerInteractEntityEvent event) {
+        handleEntityInteraction(event);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        handleEntityInteraction(event);
+    }
+
+    private void handleEntityInteraction(PlayerInteractEntityEvent event) {
+        Player player = event.getPlayer();
+        CinematicSession session = plugin.getSessionManager().getSession(player);
+        if (session == null || !session.isActive()) return;
+
+        // Spectator right-click normally attaches the camera to this entity.
+        event.setCancelled(true);
+        if (session.isWaitingForInput()) {
+            tryAdvance(player, session);
         }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        shiftPressTime.remove(uuid);
+        fPressTime.remove(uuid);
+    }
+
+    private void tryAdvance(Player player, CinematicSession session) {
         if (session.advanceDialogue()) {
-            advanceCooldown.put(uuid, now);
-            fPressTime.remove(uuid);
+            fPressTime.remove(player.getUniqueId());
         }
     }
 

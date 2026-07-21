@@ -1,0 +1,63 @@
+schemaVersion: 1
+id: example
+origin: {world: world, x: 2, y: 66, z: 5, yaw: 160, pitch: 5}
+
+actions:
+  - tick: 0
+    type: spawn_npc
+    actorId: guide
+    source:
+      provider: vanilla
+      entityType: PLAYER
+      name: Guide
+      skin: Steve
+    location: {world: world, x: 0, y: 64, z: 0, yaw: 0, pitch: 0}
+
+  - tick: 0
+    type: camera
+    mode: static
+    location: {world: world, x: 2, y: 66, z: 5, yaw: 160, pitch: 5}
+
+  - tick: 10
+    type: dialogue
+    displayMode: default
+    pages:
+      - speaker: Guide
+        text: Welcome to this cinematic.
+      - speaker: Guide
+        text: Follow me.
+
+  - tick: 20
+    type: move_npc
+    actorId: guide
+    pathId: guide_walk
+    origin: {world: world, x: 0, y: 64, z: 0, yaw: 0, pitch: 0}
+
+  - tick: 40
+    type: animation
+    actorId: guide
+    animation: SWING
+
+  - tick: 45
+    type: sound
+    sound: entity.player.levelup
+
+  - tick: 50
+    type: particle
+    particle: HAPPY_VILLAGER
+    location: {world: world, x: 3, y: 65, z: 0, yaw: 0, pitch: 0}
+
+  - tick: 60
+    type: title
+    title: Chapter One
+    subtitle: The Journey Begins
+
+  - tick: 80
+    type: message
+    text: "&aCinematic complete, %player%!"
+
+paths:
+  guide_walk:
+    - {x: 0, y: 0, z: 0, yaw: 0, pitch: 0}
+    - {x: 0.1, y: 0, z: 0, yaw: 0, pitch: 0}
+    - {x: 0.2, y: 0, z: 0, yaw: 0, pitch: 0}

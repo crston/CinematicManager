@@ -51,6 +51,7 @@
                     <exclude>**/*.png</exclude>
                     <exclude>**/*.ogg</exclude>
                     <exclude>**/*.mcmeta</exclude>
+                    <exclude>**/*.zip</exclude>
                 </excludes>
             </resource>
             <resource>
@@ -60,6 +61,7 @@
                     <include>**/*.png</include>
                     <include>**/*.ogg</include>
                     <include>**/*.mcmeta</include>
+                    <include>**/*.zip</include>
                 </includes>
             </resource>
         </resources>

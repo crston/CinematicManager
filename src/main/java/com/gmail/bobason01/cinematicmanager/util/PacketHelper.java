@@ -5,8 +5,6 @@ import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityHeadLook;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -38,22 +36,6 @@ public final class PacketHelper {
                 Optional.empty()
         );
         send(viewer, packet);
-    }
-
-    public static void sendEntityTeleport(Player viewer, Entity entity, Location loc) {
-        WrapperPlayServerEntityTeleport teleport = new WrapperPlayServerEntityTeleport(
-                entity.getEntityId(),
-                new Vector3d(loc.getX(), loc.getY(), loc.getZ()),
-                loc.getYaw(),
-                loc.getPitch(),
-                false
-        );
-        WrapperPlayServerEntityHeadLook head = new WrapperPlayServerEntityHeadLook(
-                entity.getEntityId(),
-                loc.getYaw()
-        );
-        send(viewer, teleport);
-        send(viewer, head);
     }
 
     public static void sendEntityAnimation(Player viewer, Entity entity, int animationId) {

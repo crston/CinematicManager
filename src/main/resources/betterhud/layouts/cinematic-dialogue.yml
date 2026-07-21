@@ -3,7 +3,8 @@ cinematic_dialogue_layout:
   texts:
     1:
       name: cinematic_dialogue_font
-      pattern: "<#FFFFFF>[cinematic:l1]"
+      pattern: "[cinematic:l1]"
+      use-legacy-format: true
       x: 0
       y: -72
       scale: 1.0
@@ -14,7 +15,8 @@ cinematic_dialogue_layout:
       background-scale: 1.0
     2:
       name: cinematic_dialogue_font
-      pattern: "<#FFFFFF>[cinematic:l2]"
+      pattern: "[cinematic:l2]"
+      use-legacy-format: true
       x: 0
       y: -56
       scale: 1.0
@@ -23,7 +25,8 @@ cinematic_dialogue_layout:
       layer: 5
     3:
       name: cinematic_dialogue_font
-      pattern: "<#FFFFFF>[cinematic:l3]"
+      pattern: "[cinematic:l3]"
+      use-legacy-format: true
       x: 0
       y: -42
       scale: 1.0
@@ -32,7 +35,8 @@ cinematic_dialogue_layout:
       layer: 5
     4:
       name: cinematic_dialogue_font
-      pattern: "<#FFFFFF>[cinematic:l4]"
+      pattern: "[cinematic:l4]"
+      use-legacy-format: true
       x: 0
       y: -28
       scale: 1.0

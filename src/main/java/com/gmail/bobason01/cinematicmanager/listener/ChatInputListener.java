@@ -70,7 +70,7 @@ public class ChatInputListener implements Listener {
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (context.type.equals("CREATE")) {
-                plugin.getDataManager().createCinematic(message);
+                plugin.getDataManager().createCinematic(message, player.getLocation());
                 player.sendMessage(lang.getPrefixed(LangKey.MSG_CREATE_SUCCESS));
                 plugin.getGuiManager().openStudioGUI(player, message, 0);
                 return;

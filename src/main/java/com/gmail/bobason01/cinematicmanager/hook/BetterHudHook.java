@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * BetterHud popup 연동 (핫패스 최소화: vars 재사용, wrap 캐시, update-only).
  */
-public class BetterHudHook implements Listener {
+public class BetterHudHook implements Listener, DialogueHudHook {
 
     public static final String POPUP_NAME = "cinematic_dialogue";
     public static final String EVENT_NAME = "cinematic_dialogue";
@@ -256,6 +256,12 @@ public class BetterHudHook implements Listener {
         int lines = 1;
 
         for (int i = 0; i < paragraph.length(); ) {
+            if (i + 1 < paragraph.length() && paragraph.charAt(i) == '&'
+                    && isLegacyColorCode(paragraph.charAt(i + 1))) {
+                wrapLine.append(paragraph, i, i + 2);
+                i += 2;
+                continue;
+            }
             int cp = paragraph.codePointAt(i);
             i += Character.charCount(cp);
             int w = visualWidth(cp);
@@ -328,11 +334,23 @@ public class BetterHudHook implements Listener {
     private static int visualWidthOf(String text) {
         int w = 0;
         for (int i = 0; i < text.length(); ) {
+            if (i + 1 < text.length() && text.charAt(i) == '&'
+                    && isLegacyColorCode(text.charAt(i + 1))) {
+                i += 2;
+                continue;
+            }
             int cp = text.codePointAt(i);
             i += Character.charCount(cp);
             w += visualWidth(cp);
         }
         return w;
+    }
+
+    private static boolean isLegacyColorCode(char value) {
+        char code = Character.toLowerCase(value);
+        return (code >= '0' && code <= '9') || (code >= 'a' && code <= 'f')
+                || code == 'k' || code == 'l' || code == 'm' || code == 'n'
+                || code == 'o' || code == 'r' || code == 'x';
     }
 
     private void exportConfigs() {
