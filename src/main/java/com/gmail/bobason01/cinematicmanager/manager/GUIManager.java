@@ -36,7 +36,39 @@ public class GUIManager {
         LangManager lang = plugin.getLangManager();
         Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_MAIN));
         inv.setItem(11, createItem(Material.WRITABLE_BOOK, lang.get(LangKey.MENU_MAIN_LIST), LangKey.MENU_MAIN_LIST_LORE));
+        inv.setItem(13, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_MAIN_NPC), LangKey.MENU_MAIN_NPC_LORE));
         inv.setItem(15, createItem(Material.EMERALD, lang.get(LangKey.MENU_MAIN_CREATE), LangKey.MENU_MAIN_CREATE_LORE));
+        player.openInventory(inv);
+    }
+
+    public void openNpcPresetMenu(Player player, int page) {
+        LangManager lang = plugin.getLangManager();
+        Inventory inv = Bukkit.createInventory(null, 54, lang.get(LangKey.MENU_NPC_PRESET));
+        List<com.gmail.bobason01.cinematicmanager.data.NpcPreset> presets =
+                new ArrayList<>(plugin.getNpcPresetManager().all());
+        presets.sort(Comparator.comparing(com.gmail.bobason01.cinematicmanager.data.NpcPreset::getId));
+        int start = page * 45;
+        for (int i = 0; i < 45 && start + i < presets.size(); i++) {
+            var preset = presets.get(start + i);
+            ItemStack item = createItem(Material.PLAYER_HEAD,
+                    lang.format(LangKey.MENU_NPC_PRESET_NAME, "{id}", preset.getId()),
+                    lang.format(LangKey.MENU_NPC_PRESET_INFO,
+                            "{provider}", preset.getProvider(),
+                            "{detail}", preset.asSpawnValue()),
+                    LangKey.MENU_NPC_PRESET_USE_LORE,
+                    LangKey.MENU_NPC_PRESET_DELETE_LORE);
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                meta.getPersistentDataContainer().set(npcTargetKey, PersistentDataType.STRING, preset.getId());
+                item.setItemMeta(meta);
+            }
+            inv.setItem(i, item);
+        }
+        inv.setItem(45, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_PREV)));
+        inv.setItem(49, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_LIST_BACK)));
+        inv.setItem(51, createItem(Material.EMERALD, lang.get(LangKey.MENU_NPC_PRESET_CREATE), LangKey.MENU_NPC_PRESET_CREATE_LORE));
+        inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_NEXT)));
+        player.setMetadata("npc_preset_page", new FixedMetadataValue(plugin, page));
         player.openInventory(inv);
     }
 
@@ -92,9 +124,11 @@ public class GUIManager {
         }
         inv.setItem(45, createItem(Material.ARROW, lang.get(LangKey.MENU_STUDIO_PREV)));
         inv.setItem(46, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
+        inv.setItem(47, createItem(Material.SPYGLASS, lang.get(LangKey.MENU_STUDIO_ENV_RECORD), LangKey.MENU_STUDIO_ENV_RECORD_LORE));
         inv.setItem(48, createItem(Material.LIME_STAINED_GLASS, lang.get(LangKey.MENU_STUDIO_PLAY)));
         inv.setItem(49, createItem(Material.BOOK, lang.get(LangKey.MENU_STUDIO_SAVE)));
         inv.setItem(50, createItem(Material.RED_STAINED_GLASS, lang.get(LangKey.MENU_STUDIO_STOP)));
+        inv.setItem(52, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_STUDIO_NPC_LIBRARY), LangKey.MENU_STUDIO_NPC_LIBRARY_LORE));
         inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_STUDIO_NEXT)));
 
         player.setMetadata("edit_id", new FixedMetadataValue(plugin, id));
@@ -146,6 +180,8 @@ public class GUIManager {
         inv.setItem(13, createItem(Material.SLIME_BALL, lang.get(LangKey.MENU_ANIMATION_SNEAK), LangKey.MENU_ANIMATION_SNEAK_LORE));
         inv.setItem(14, createItem(Material.WHITE_BED, lang.get(LangKey.MENU_ANIMATION_SLEEP), LangKey.MENU_ANIMATION_SLEEP_LORE));
         inv.setItem(20, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_ANIMATION_CUSTOM), LangKey.MENU_ANIMATION_CUSTOM_LORE));
+        inv.setItem(21, createItem(Material.ANVIL, lang.get(LangKey.MENU_ANIMATION_REMAP), LangKey.MENU_ANIMATION_REMAP_LORE));
+        inv.setItem(22, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_ANIMATION_CHANGEPART), LangKey.MENU_ANIMATION_CHANGEPART_LORE));
         inv.setItem(24, createItem(Material.BARRIER, lang.get(LangKey.MENU_ANIMATION_STOP), LangKey.MENU_ANIMATION_STOP_LORE));
         inv.setItem(31, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
         player.openInventory(inv);
@@ -196,18 +232,19 @@ public class GUIManager {
 
     public void openEffectSelectGUI(Player player, String id, int tick, int page) {
         LangManager lang = plugin.getLangManager();
-        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_STUDIO_ADD_EFFECT));
-        // 중요: 이펙트 선택창을 열 때도 현재 틱을 메타데이터로 고정
+        Inventory inv = Bukkit.createInventory(null, 36, lang.get(LangKey.MENU_STUDIO_ADD_EFFECT));
         player.setMetadata("edit_tick", new FixedMetadataValue(plugin, tick));
         inv.setItem(10, createItem(Material.JUKEBOX, lang.get(LangKey.MENU_EFFECT_SOUND), LangKey.MENU_EFFECT_SOUND_LORE));
         inv.setItem(11, createItem(Material.BLAZE_POWDER, lang.get(LangKey.MENU_EFFECT_PARTICLE), LangKey.MENU_EFFECT_PARTICLE_LORE));
         inv.setItem(12, createItem(Material.NAME_TAG, lang.get(LangKey.MENU_EFFECT_TITLE), LangKey.MENU_EFFECT_TITLE_LORE));
         inv.setItem(13, createItem(Material.PAPER, lang.get(LangKey.MENU_EFFECT_MESSAGE), LangKey.MENU_EFFECT_MESSAGE_LORE));
-        inv.setItem(14, createItem(Material.BOOK, lang.get(LangKey.MENU_EFFECT_DIALOGUE), LangKey.MENU_EFFECT_DIALOGUE_LORE));
-        inv.setItem(15, createItem(Material.CLOCK, lang.get(LangKey.MENU_EFFECT_WAIT), LangKey.MENU_EFFECT_WAIT_LORE));
-        inv.setItem(16, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_EFFECT_COMMAND), LangKey.MENU_EFFECT_COMMAND_LORE));
-        inv.setItem(17, createItem(Material.LIGHTNING_ROD, lang.get(LangKey.MENU_EFFECT_LIGHTNING), LangKey.MENU_EFFECT_LIGHTNING_LORE));
-        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
+        inv.setItem(14, createItem(Material.BOOK, lang.get(LangKey.MENU_EFFECT_DIALOGUE_TITLE), LangKey.MENU_EFFECT_DIALOGUE_TITLE_LORE));
+        inv.setItem(15, createItem(Material.ENCHANTED_BOOK, lang.get(LangKey.MENU_EFFECT_DIALOGUE_ACTIONBAR), LangKey.MENU_EFFECT_DIALOGUE_ACTIONBAR_LORE));
+        inv.setItem(16, createItem(Material.CLOCK, lang.get(LangKey.MENU_EFFECT_WAIT), LangKey.MENU_EFFECT_WAIT_LORE));
+        inv.setItem(19, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_EFFECT_COMMAND), LangKey.MENU_EFFECT_COMMAND_LORE));
+        inv.setItem(20, createItem(Material.LIGHTNING_ROD, lang.get(LangKey.MENU_EFFECT_LIGHTNING), LangKey.MENU_EFFECT_LIGHTNING_LORE));
+        inv.setItem(21, createItem(Material.SPYGLASS, lang.get(LangKey.MENU_EFFECT_ENV_RECORD), LangKey.MENU_EFFECT_ENV_RECORD_LORE));
+        inv.setItem(31, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
         player.openInventory(inv);
     }
 

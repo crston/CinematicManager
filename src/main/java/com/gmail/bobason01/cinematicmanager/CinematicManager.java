@@ -1,10 +1,12 @@
 package com.gmail.bobason01.cinematicmanager;
 
 import com.gmail.bobason01.cinematicmanager.command.CinematicCommand;
-import com.gmail.bobason01.cinematicmanager.hook.DialogueHudHook;
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPacketListener;
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentRecordManager;
 import com.gmail.bobason01.cinematicmanager.hook.HookManager;
 import com.gmail.bobason01.cinematicmanager.listener.*;
 import com.gmail.bobason01.cinematicmanager.manager.*;
+import com.github.retrooper.packetevents.PacketEvents;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -16,8 +18,9 @@ public class CinematicManager extends JavaPlugin {
     private ConfigManager configManager;
     private SessionManager sessionManager;
     private CustomNPCManager npcManager;
+    private NpcPresetManager npcPresetManager;
+    private EnvironmentRecordManager environmentRecordManager;
     private HookManager hookManager;
-    private DialogueHudHook dialogueHudHook = DialogueHudHook.disabled();
     private GUIManager guiManager;
     private LangManager langManager;
     private ChatInputListener chatInputListener;
@@ -33,14 +36,16 @@ public class CinematicManager extends JavaPlugin {
         this.langManager = new LangManager(this);
         this.configManager = new ConfigManager(this);
         this.hookManager = new HookManager(this);
-        this.dialogueHudHook = createDialogueHudHook();
         this.npcManager = new CustomNPCManager(this);
+        this.npcPresetManager = new NpcPresetManager(this);
+        this.environmentRecordManager = new EnvironmentRecordManager(this);
         this.sessionManager = new SessionManager(this);
         this.guiManager = new GUIManager(this);
         this.chatInputListener = new ChatInputListener(this);
 
         registerListeners();
         registerCommands();
+        PacketEvents.getAPI().getEventManager().registerListener(new EnvironmentPacketListener(this));
 
         getLogger().info("CinematicManager has been enabled successfully.");
     }
@@ -51,24 +56,6 @@ public class CinematicManager extends JavaPlugin {
         pm.registerEvents(chatInputListener, this);
         pm.registerEvents(new InputListener(this), this);
         pm.registerEvents(new CinematicControlListener(this), this);
-    }
-
-    private DialogueHudHook createDialogueHudHook() {
-        if (!getServer().getPluginManager().isPluginEnabled("BetterHud")) {
-            getLogger().info("BetterHud not found. Dialogue will use the built-in bossbar renderer.");
-            return DialogueHudHook.disabled();
-        }
-        try {
-            Class<?> type = Class.forName(
-                    "com.gmail.bobason01.cinematicmanager.hook.BetterHudHook",
-                    true,
-                    getClassLoader());
-            return (DialogueHudHook) type.getConstructor(CinematicManager.class).newInstance(this);
-        } catch (Throwable error) {
-            getLogger().warning("BetterHud integration could not start; using bossbar dialogue: "
-                    + error.getClass().getSimpleName() + ": " + error.getMessage());
-            return DialogueHudHook.disabled();
-        }
     }
 
     private void registerCommands() {
@@ -140,12 +127,16 @@ public class CinematicManager extends JavaPlugin {
         return npcManager;
     }
 
-    public HookManager getHookManager() {
-        return hookManager;
+    public NpcPresetManager getNpcPresetManager() {
+        return npcPresetManager;
     }
 
-    public DialogueHudHook getBetterHudHook() {
-        return dialogueHudHook;
+    public EnvironmentRecordManager getEnvironmentRecordManager() {
+        return environmentRecordManager;
+    }
+
+    public HookManager getHookManager() {
+        return hookManager;
     }
 
     public GUIManager getGuiManager() {

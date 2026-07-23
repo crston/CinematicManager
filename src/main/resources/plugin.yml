@@ -3,7 +3,7 @@ version: 20.0
 main: com.gmail.bobason01.cinematicmanager.CinematicManager
 api-version: 1.21
 depend: [packetevents]
-softdepend: [PlaceholderAPI, MythicMobs, ModelEngine, BetterHud, LibsDisguises]
+softdepend: [PlaceholderAPI, MythicMobs, ModelEngine, LibsDisguises]
 author: crston
 commands:
   cinematic:

@@ -33,5 +33,5 @@ Console commands are rejected by default. They require both `executor: console`
 and `ai-import.allow-console-commands: true`, because they execute with full
 server permissions.
 
-BetterHud is optional. Without it the plugin and all non-dialogue actions work,
-and dialogue is rendered by the built-in bossbar fallback.
+Dialogue defaults to Minecraft title (speaker + line). Optional `displayMode`
+values: `title`, `actionbar`, `both`, `bossbar`.

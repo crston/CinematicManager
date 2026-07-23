@@ -1,5 +1,6 @@
 package com.gmail.bobason01.cinematicmanager.data;
 
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
@@ -13,6 +14,7 @@ public class CinematicData implements Serializable {
     private final String id;
     private final Map<Integer, List<CinematicAction>> timeline = new HashMap<>();
     private final Map<String, List<Location>> pathRecords = new HashMap<>();
+    private final Map<String, EnvironmentClip> environmentClips = new HashMap<>();
     private Location origin;
 
     public CinematicData(String id) {
@@ -44,6 +46,18 @@ public class CinematicData implements Serializable {
 
     public void addPathRecord(String recordId, List<Location> path) {
         pathRecords.put(recordId, new ArrayList<>(path));
+    }
+
+    public EnvironmentClip getEnvironmentClip(String recordId) {
+        return environmentClips.get(recordId);
+    }
+
+    public Map<String, EnvironmentClip> getEnvironmentClips() {
+        return Collections.unmodifiableMap(environmentClips);
+    }
+
+    public void addEnvironmentClip(String recordId, EnvironmentClip clip) {
+        if (recordId != null && clip != null) environmentClips.put(recordId, clip);
     }
 
     public void addAction(int tick, CinematicAction action) {
@@ -98,7 +112,8 @@ public class CinematicData implements Serializable {
                 type == CinematicAction.ActionType.COMMAND ||
                 type == CinematicAction.ActionType.LIGHTNING ||
                 type == CinematicAction.ActionType.DIALOGUE ||
-                type == CinematicAction.ActionType.WAIT;
+                type == CinematicAction.ActionType.WAIT ||
+                type == CinematicAction.ActionType.ENV_CLIP;
     }
 
     /**
@@ -108,6 +123,8 @@ public class CinematicData implements Serializable {
         return type == CinematicAction.ActionType.SPAWN_NPC ||
                 type == CinematicAction.ActionType.MOVE_NPC ||
                 type == CinematicAction.ActionType.ANIMATION ||
+                type == CinematicAction.ActionType.REMAP_MODEL ||
+                type == CinematicAction.ActionType.CHANGE_PART ||
                 type == CinematicAction.ActionType.HIDE_ENTITY ||
                 type == CinematicAction.ActionType.SHOW_ENTITY;
     }

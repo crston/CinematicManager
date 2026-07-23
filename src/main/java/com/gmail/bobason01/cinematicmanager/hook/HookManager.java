@@ -75,13 +75,21 @@ public class HookManager {
         try {
             ArmorStand as = loc.getWorld().spawn(loc, ArmorStand.class, entity -> {
                 entity.setInvisible(true);
+                entity.setMarker(true);
+                entity.setBasePlate(false);
                 entity.setPersistent(false);
                 entity.setInvulnerable(true);
+                entity.setGravity(false);
             });
             ActiveModel model = ModelEngineAPI.createActiveModel(modelId);
-            if (model != null) {
-                ModelEngineAPI.getOrCreateModeledEntity(as).addModel(model, true);
+            if (model == null) {
+                as.remove();
+                return null;
             }
+            var me = ModelEngineAPI.getOrCreateModeledEntity(as);
+            me.addModel(model, true);
+            as.setInvisible(true);
+            me.setBaseEntityVisible(false);
             return as;
         } catch (Exception e) {
             e.printStackTrace();

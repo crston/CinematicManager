@@ -4,6 +4,8 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.api.event.CinematicEndEvent;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPlayer;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.manager.LangManager;
 import com.gmail.bobason01.cinematicmanager.util.PacketHelper;
@@ -42,6 +44,7 @@ public class CinematicSession {
     private final Map<String, Entity> activeEntities = new HashMap<>();
     private final Map<String, Location> spawnLocations = new HashMap<>();
     private final Map<String, ActivePath> movingNpcs = new HashMap<>();
+    private final List<EnvironmentPlayer> environmentPlayers = new ArrayList<>(2);
 
     private Location staticCameraLoc = null;
     private boolean staticCameraApplied = false;
@@ -53,7 +56,7 @@ public class CinematicSession {
 
     private List<String> dialoguePages = Collections.emptyList();
     private int dialoguePageIndex = 0;
-    private String dialogueDisplayMode = "both";
+    private String dialogueDisplayMode = "title";
 
     /** 시청자 시야 방향 앞 1블록에만 보이는 개인 페이크 블록 */
     private Location clickProxyBlock = null;
@@ -75,7 +78,6 @@ public class CinematicSession {
     private boolean dialogueTyping = false;
     private long lastDialogueAdvanceNanos = 0L;
     private BossBar dialogueBossBar;
-    private boolean betterHudMode = false;
 
     private boolean typingEnabled = true;
     private int typingTicksPerChar = 2;
@@ -106,7 +108,6 @@ public class CinematicSession {
         this.scheduleIndex = 0;
         this.clickProxyEnabled = plugin.getConfig().getBoolean("dialogue.click-proxy", true);
         cacheTypingConfig();
-        this.betterHudMode = plugin.getBetterHudHook() != null && plugin.getBetterHudHook().isEnabled();
 
         player.setGameMode(GameMode.SPECTATOR);
         Location cinematicOrigin = data.getOrigin();
@@ -161,6 +162,7 @@ public class CinematicSession {
         }
 
         updateNpcMovements();
+        updateEnvironmentPlayers();
         if (!active) return;
 
         // 이번 틱에서 대화에 들어갔으면 틱만 소모하고 멈춤 (재트리거 방지)
@@ -170,7 +172,7 @@ public class CinematicSession {
         }
 
         if (currentTick > maxTick && movingNpcs.isEmpty() && cameraRelative == null
-                && !cameraUpdated) {
+                && !cameraUpdated && environmentPlayers.isEmpty()) {
             stop();
             return;
         }
@@ -261,8 +263,30 @@ public class CinematicSession {
             case SHOW_ENTITY -> handleShow(action);
             case LIGHTNING -> handleLightning(action);
             case ANIMATION -> handleAnimation(action);
+            case REMAP_MODEL -> handleRemapModel(action);
+            case CHANGE_PART -> handleChangePart(action);
             case DIALOGUE -> handleDialogue(action);
             case WAIT -> handleWait(action);
+            case ENV_CLIP -> handleEnvironmentClip(action);
+        }
+    }
+
+    private void handleEnvironmentClip(CinematicAction action) {
+        EnvironmentClip clip = data.getEnvironmentClip(action.getValue());
+        if (clip == null) return;
+        environmentPlayers.add(new EnvironmentPlayer(plugin, player, clip));
+    }
+
+    private void updateEnvironmentPlayers() {
+        if (environmentPlayers.isEmpty()) return;
+        Iterator<EnvironmentPlayer> it = environmentPlayers.iterator();
+        while (it.hasNext()) {
+            EnvironmentPlayer env = it.next();
+            env.tick();
+            if (env.isDone()) {
+                env.cleanup();
+                it.remove();
+            }
         }
     }
 
@@ -424,6 +448,18 @@ public class CinematicSession {
         }
     }
 
+    private void handleRemapModel(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e == null) return;
+        plugin.getNpcManager().applyRemapModel(e, resolvePlaceholders(action.getValue()));
+    }
+
+    private void handleChangePart(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e == null) return;
+        plugin.getNpcManager().applyChangePart(e, resolvePlaceholders(action.getValue()));
+    }
+
     private void handleCommand(CinematicAction action) {
         String cmd = resolvePlaceholders(action.getValue());
         if (cmd.startsWith("#")) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.substring(1).trim());
@@ -480,12 +516,21 @@ public class CinematicSession {
     private String resolveDisplayMode(String extra) {
         if (extra != null && !extra.isBlank()) {
             String mode = extra.trim().toLowerCase(Locale.ROOT);
+            // Legacy BetterHud mode → title
+            if (mode.equals("betterhud") || mode.equals("default")) {
+                return "title";
+            }
             if (mode.equals("title") || mode.equals("actionbar") || mode.equals("both")
-                    || mode.equals("betterhud") || mode.equals("bossbar")) {
+                    || mode.equals("bossbar")) {
                 return mode;
             }
         }
-        return plugin.getConfig().getString("dialogue.display-mode", "bossbar").toLowerCase(Locale.ROOT);
+        String configured = plugin.getConfig().getString("dialogue.display-mode", "title")
+                .toLowerCase(Locale.ROOT);
+        if (configured.equals("betterhud") || configured.equals("default")) {
+            return "title";
+        }
+        return configured;
     }
 
     private void showDialoguePage() {
@@ -509,14 +554,15 @@ public class CinematicSession {
         dialogueTypedChars = 0;
         dialogueTypeTick = 0;
         dialogueTyping = typingEnabled && dialoguePlainLength > 0;
-        betterHudMode = dialogueDisplayMode.equals("betterhud")
-                && plugin.getBetterHudHook().isEnabled();
 
-        // 페이지 시작 때 1회만 클리어
-        if (betterHudMode) {
+        if (dialogueDisplayMode.equals("title")) {
+            clearDialogueBossBar();
+            sendActionBar("");
+        } else if (dialogueDisplayMode.equals("actionbar")) {
             clearDialogueBossBar();
             player.sendTitle("", "", 0, 1, 0);
-            sendActionBar("");
+        } else if (dialogueDisplayMode.equals("both")) {
+            clearDialogueBossBar();
         }
         renderDialogueFrame();
     }
@@ -552,30 +598,30 @@ public class CinematicSession {
     }
 
     private void renderDialogueFrame() {
-        if (betterHudMode) {
-            String coloredVisible = visibleTypedText(dialogueFullLine, dialogueTypedChars);
-            plugin.getBetterHudHook().showDialogue(player, legacyForBetterHud(dialogueSpeaker),
-                    legacyForBetterHud(coloredVisible), "");
-            return;
-        }
-
         String visibleLine = visibleTypedText(dialogueFullLine, dialogueTypedChars);
 
-        if (dialogueDisplayMode.equals("title") || dialogueDisplayMode.equals("both")) {
+        if (dialogueDisplayMode.equals("title")) {
             player.sendTitle(dialogueSpeaker, visibleLine, 0, 40, 0);
+            clearDialogueBossBar();
+            return;
         }
-        if (dialogueDisplayMode.equals("actionbar") || dialogueDisplayMode.equals("both")) {
+        if (dialogueDisplayMode.equals("actionbar")) {
             String actionBar = dialogueSpeaker.isEmpty()
                     ? visibleLine : dialogueSpeaker + " §7» §f" + visibleLine;
             sendActionBar(actionBar);
+            clearDialogueBossBar();
+            return;
         }
-        if (dialogueDisplayMode.equals("title") || dialogueDisplayMode.equals("actionbar")
-                || dialogueDisplayMode.equals("both")) {
+        if (dialogueDisplayMode.equals("both")) {
+            player.sendTitle(dialogueSpeaker, visibleLine, 0, 40, 0);
+            String actionBar = dialogueSpeaker.isEmpty()
+                    ? visibleLine : dialogueSpeaker + " §7» §f" + visibleLine;
+            sendActionBar(actionBar);
             clearDialogueBossBar();
             return;
         }
 
-        // 폴백: BetterHud 없을 때 단순 보스바 텍스트
+        // bossbar fallback
         String body;
         if (!dialogueSpeaker.isEmpty() && !visibleLine.isEmpty()) {
             body = "§e" + dialogueSpeaker + "§7 » §f" + visibleLine;
@@ -648,7 +694,7 @@ public class CinematicSession {
         return sb == null ? text : sb.toString();
     }
 
-    /** 입력의 \\n / &lt;br&gt; 을 실제 개행으로 (BetterHud 여러 줄용) */
+    /** 입력의 \\n / &lt;br&gt; 을 실제 개행으로 */
     private String normalizeLineBreaks(String text) {
         if (text == null || text.isEmpty()) return text == null ? "" : text;
         return text
@@ -669,9 +715,6 @@ public class CinematicSession {
         dialogueHint = "";
         clearClickProxy();
         clearDialogueBossBar();
-        if (plugin.getBetterHudHook() != null) {
-            plugin.getBetterHudHook().hideDialogue(player);
-        }
         player.sendTitle("", "", 0, 1, 0);
         sendActionBar("");
     }
@@ -773,10 +816,6 @@ public class CinematicSession {
         return resolved;
     }
 
-    private String legacyForBetterHud(String text) {
-        return text == null ? "" : text.replace('§', '&');
-    }
-
     private void handleHide(CinematicAction action) {
         Entity e = findEntity(action.getValue());
         if (e != null) e.teleport(e.getLocation().add(0, -100, 0));
@@ -819,12 +858,11 @@ public class CinematicSession {
         dialogueTyping = false;
         deferredActions.clear();
         clearDialogueBossBar();
-        if (plugin.getBetterHudHook() != null) {
-            plugin.getBetterHudHook().hideDialogue(player);
-        }
         clearClickProxy();
         activeEntities.values().forEach(e -> plugin.getNpcManager().remove(e));
         activeEntities.clear(); movingNpcs.clear(); spawnLocations.clear();
+        for (EnvironmentPlayer env : environmentPlayers) env.cleanup();
+        environmentPlayers.clear();
         if (player.isOnline()) {
             player.sendTitle("", "", 0, 1, 0);
             sendActionBar("");

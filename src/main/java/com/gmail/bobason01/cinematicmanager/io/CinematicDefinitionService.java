@@ -3,6 +3,7 @@ package com.gmail.bobason01.cinematicmanager.io;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -123,6 +124,10 @@ public final class CinematicDefinitionService {
                     paths.put(entry.getKey(), points);
                 });
         yaml.set("paths", paths);
+
+        data.getEnvironmentClips().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> entry.getValue().serialize(yaml, "environments." + entry.getKey()));
         return yaml;
     }
 
@@ -157,7 +162,7 @@ public final class CinematicDefinitionService {
             return null;
         }
         for (String key : yaml.getKeys(false)) {
-            if (!Set.of("schemaVersion", "id", "origin", "actions", "paths").contains(key)) {
+            if (!Set.of("schemaVersion", "id", "origin", "actions", "paths", "environments").contains(key)) {
                 diagnostics.add(error("field.unknown", key, "Unknown top-level field."));
             }
         }
@@ -189,6 +194,7 @@ public final class CinematicDefinitionService {
             diagnostics.add(error("origin.object.required", "origin", "Origin must be an object."));
         }
         parsePathsV1(yaml, data, diagnostics);
+        parseEnvironmentsV1(yaml, data, diagnostics);
         List<Map<?, ?>> actionMaps = yaml.getMapList("actions");
         List<?> rawActions = yaml.getList("actions");
         if (rawActions != null && rawActions.size() != actionMaps.size()) {
@@ -271,10 +277,8 @@ public final class CinematicDefinitionService {
             return;
         }
         String typeName = normalized(map.get("type"));
-        CinematicAction.ActionType type;
-        try {
-            type = CinematicAction.ActionType.valueOf(typeName.toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
+        CinematicAction.ActionType type = resolveActionType(typeName);
+        if (type == null) {
             diagnostics.add(error("action.type.unknown", base + ".type",
                     "Unknown action type '" + typeName + "'."));
             return;
@@ -347,6 +351,14 @@ public final class CinematicDefinitionService {
                 value = requiredText(map, "animation", base, diagnostics);
                 extra = resolveActor(map, actors, base, diagnostics);
             }
+            case REMAP_MODEL -> {
+                value = encodeRemapModel(map, base, diagnostics);
+                extra = resolveActor(map, actors, base, diagnostics);
+            }
+            case CHANGE_PART -> {
+                value = encodeChangePart(map, base, diagnostics);
+                extra = resolveActor(map, actors, base, diagnostics);
+            }
             case LIGHTNING -> location = readLocation(map(map.get("location")),
                     base + ".location", true, diagnostics);
             case DIALOGUE -> {
@@ -357,9 +369,36 @@ public final class CinematicDefinitionService {
                 value = requiredText(map, "prompt", base, diagnostics);
                 extra = displayMode(map.get("displayMode"), base, diagnostics);
             }
+            case ENV_CLIP -> value = requiredText(map, "clipId", base, diagnostics);
         }
         if (value == null && type != CinematicAction.ActionType.LIGHTNING) return;
         data.addAction(tick, new CinematicAction(type, value, location, extra));
+    }
+
+    private void parseEnvironmentsV1(YamlConfiguration yaml, CinematicData data,
+                                     List<Diagnostic> diagnostics) {
+        ConfigurationSection section = yaml.getConfigurationSection("environments");
+        if (section == null) {
+            if (yaml.contains("environments")) {
+                diagnostics.add(error("environments.object.required", "environments",
+                        "Environments must be an object."));
+            }
+            return;
+        }
+        for (String clipId : section.getKeys(false)) {
+            if (!isSafeId(clipId)) {
+                diagnostics.add(error("env.id.invalid", "environments." + clipId,
+                        "Environment clip id uses unsafe characters."));
+                continue;
+            }
+            ConfigurationSection clipSection = section.getConfigurationSection(clipId);
+            if (clipSection == null) {
+                diagnostics.add(error("env.object.required", "environments." + clipId,
+                        "Environment clip must be an object."));
+                continue;
+            }
+            data.addEnvironmentClip(clipId, EnvironmentClip.deserialize(clipSection));
+        }
     }
 
     private CinematicData parseLegacy(YamlConfiguration yaml, String id,
@@ -390,8 +429,13 @@ public final class CinematicDefinitionService {
                     String base = "timeline." + tickKey + "[" + i + "]";
                     Map<?, ?> map = maps.get(i);
                     try {
-                        CinematicAction.ActionType type = CinematicAction.ActionType.valueOf(
-                                text(map.get("type")).toUpperCase(Locale.ROOT));
+                        String typeRaw = text(map.get("type")).toUpperCase(Locale.ROOT);
+                        if ("GESTURE".equals(typeRaw)) {
+                            diagnostics.add(error("legacy.gesture.removed", base,
+                                    "GESTURE actions were removed; use ModelEngine animation/remap_model/change_part."));
+                            continue;
+                        }
+                        CinematicAction.ActionType type = CinematicAction.ActionType.valueOf(typeRaw);
                         String value = nullableText(map.get("value"));
                         String extra = nullableText(map.get("extra"));
                         Location location = readLegacyLocation(map, base, diagnostics);
@@ -504,8 +548,14 @@ public final class CinematicDefinitionService {
                             "timeline." + tick + "[" + i + "]",
                             "Path '" + action.getValue() + "' does not exist."));
                 }
+                if (action.getType() == CinematicAction.ActionType.ENV_CLIP
+                        && data.getEnvironmentClip(action.getValue()) == null) {
+                    diagnostics.add(error("env.reference.unknown",
+                            "timeline." + tick + "[" + i + "]",
+                            "Environment clip '" + action.getValue() + "' does not exist."));
+                }
                 String target = switch (action.getType()) {
-                    case MOVE_NPC, ANIMATION -> action.getExtra();
+                    case MOVE_NPC, ANIMATION, REMAP_MODEL, CHANGE_PART -> action.getExtra();
                     case HIDE_ENTITY -> action.getValue();
                     case SHOW_ENTITY -> action.getExtra() != null
                             ? action.getExtra() : action.getValue();
@@ -538,9 +588,12 @@ public final class CinematicDefinitionService {
             case HIDE_ENTITY -> allowed.add("actorId");
             case SHOW_ENTITY -> allowed.addAll(Set.of("actorId", "location"));
             case ANIMATION -> allowed.addAll(Set.of("actorId", "animation"));
+            case REMAP_MODEL -> allowed.addAll(Set.of("actorId", "model", "newModel", "map"));
+            case CHANGE_PART -> allowed.addAll(Set.of("actorId", "model", "part", "newModel", "newPart"));
             case LIGHTNING -> allowed.add("location");
             case DIALOGUE -> allowed.addAll(Set.of("displayMode", "pages"));
             case WAIT -> allowed.addAll(Set.of("displayMode", "prompt"));
+            case ENV_CLIP -> allowed.add("clipId");
         }
         for (Object key : map.keySet()) {
             String name = String.valueOf(key);
@@ -555,7 +608,7 @@ public final class CinematicDefinitionService {
                                                 Map<String, String> actorIds) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("tick", tick);
-        out.put("type", action.getType().name().toLowerCase(Locale.ROOT));
+        out.put("type", serializeTypeName(action.getType()));
         switch (action.getType()) {
             case SPAWN_NPC -> {
                 out.put("actorId", actorIds.get(action.getValue()));
@@ -606,6 +659,16 @@ public final class CinematicDefinitionService {
                         actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
                 out.put("animation", action.getValue());
             }
+            case REMAP_MODEL -> {
+                out.put("actorId",
+                        actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
+                putRemapFields(out, action.getValue());
+            }
+            case CHANGE_PART -> {
+                out.put("actorId",
+                        actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
+                putChangePartFields(out, action.getValue());
+            }
             case LIGHTNING -> out.put("location", actionLocationMap(action));
             case DIALOGUE -> {
                 List<Map<String, Object>> pages = new ArrayList<>();
@@ -624,8 +687,112 @@ public final class CinematicDefinitionService {
                 out.put("prompt", action.getValue());
                 out.put("displayMode", action.getExtra() == null ? "default" : action.getExtra());
             }
+            case ENV_CLIP -> out.put("clipId", action.getValue());
         }
         return out;
+    }
+
+    private static CinematicAction.ActionType resolveActionType(String typeName) {
+        if (typeName == null || typeName.isBlank()) return null;
+        String n = typeName.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        return switch (n) {
+            case "STATE" -> CinematicAction.ActionType.ANIMATION;
+            case "REMAP", "REMAPMODEL", "REMAP_MODEL" -> CinematicAction.ActionType.REMAP_MODEL;
+            case "CHANGEPART", "CHANGE_PART" -> CinematicAction.ActionType.CHANGE_PART;
+            case "GESTURE" -> null; // removed
+            default -> {
+                try {
+                    yield CinematicAction.ActionType.valueOf(n);
+                } catch (Exception ignored) {
+                    yield null;
+                }
+            }
+        };
+    }
+
+    private static String serializeTypeName(CinematicAction.ActionType type) {
+        return switch (type) {
+            case REMAP_MODEL -> "remap_model";
+            case CHANGE_PART -> "change_part";
+            default -> type.name().toLowerCase(Locale.ROOT);
+        };
+    }
+
+    private String encodeRemapModel(Map<?, ?> map, String base, List<Diagnostic> diagnostics) {
+        String newModel = requiredText(map, "newModel", base, diagnostics);
+        if (newModel == null) return null;
+        String model = nullableText(map.get("model"));
+        String mapModel = nullableText(map.get("map"));
+        StringBuilder out = new StringBuilder();
+        if (model != null && !model.isBlank()) {
+            out.append(model.trim()).append('>');
+        }
+        out.append(newModel.trim());
+        if (mapModel != null && !mapModel.isBlank()) {
+            out.append('|').append(mapModel.trim());
+        }
+        return out.toString();
+    }
+
+    private String encodeChangePart(Map<?, ?> map, String base, List<Diagnostic> diagnostics) {
+        String part = requiredText(map, "part", base, diagnostics);
+        String newModel = requiredText(map, "newModel", base, diagnostics);
+        String newPart = requiredText(map, "newPart", base, diagnostics);
+        if (part == null || newModel == null || newPart == null) return null;
+        String model = nullableText(map.get("model"));
+        StringBuilder out = new StringBuilder();
+        if (model != null && !model.isBlank()) {
+            out.append(model.trim()).append(':');
+        }
+        out.append(part.trim()).append('>')
+                .append(newModel.trim()).append(':')
+                .append(newPart.trim());
+        return out.toString();
+    }
+
+    private static void putRemapFields(Map<String, Object> out, String value) {
+        String body = text(value);
+        String map = null;
+        int pipe = body.indexOf('|');
+        if (pipe >= 0) {
+            map = body.substring(pipe + 1).trim();
+            body = body.substring(0, pipe).trim();
+        }
+        int gt = body.indexOf('>');
+        if (gt >= 0) {
+            String model = body.substring(0, gt).trim();
+            if (!model.isEmpty()) out.put("model", model);
+            out.put("newModel", body.substring(gt + 1).trim());
+        } else {
+            out.put("newModel", body);
+        }
+        if (map != null && !map.isEmpty()) out.put("map", map);
+    }
+
+    private static void putChangePartFields(Map<String, Object> out, String value) {
+        String body = text(value);
+        int gt = body.indexOf('>');
+        if (gt < 0) {
+            out.put("part", body);
+            return;
+        }
+        String left = body.substring(0, gt).trim();
+        String right = body.substring(gt + 1).trim();
+        int colonLeft = left.indexOf(':');
+        if (colonLeft >= 0) {
+            String model = left.substring(0, colonLeft).trim();
+            if (!model.isEmpty()) out.put("model", model);
+            out.put("part", left.substring(colonLeft + 1).trim());
+        } else {
+            out.put("part", left);
+        }
+        int colonRight = right.indexOf(':');
+        if (colonRight >= 0) {
+            out.put("newModel", right.substring(0, colonRight).trim());
+            out.put("newPart", right.substring(colonRight + 1).trim());
+        } else {
+            out.put("newModel", right);
+        }
     }
 
     private Map<String, String> buildActorIds(CinematicData data) {
@@ -742,9 +909,10 @@ public final class CinematicDefinitionService {
     private String displayMode(Object value, String base, List<Diagnostic> diagnostics) {
         String mode = normalized(value);
         if (mode.isEmpty() || "default".equals(mode)) return null;
-        if (!Set.of("title", "actionbar", "both", "betterhud", "bossbar").contains(mode)) {
+        if ("betterhud".equals(mode)) return "title"; // legacy alias
+        if (!Set.of("title", "actionbar", "both", "bossbar").contains(mode)) {
             diagnostics.add(error("display_mode.invalid", base + ".displayMode",
-                    "Use default, title, actionbar, both, betterhud, or bossbar."));
+                    "Use default, title, actionbar, both, or bossbar."));
         }
         return mode;
     }
