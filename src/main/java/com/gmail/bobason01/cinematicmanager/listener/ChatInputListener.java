@@ -51,6 +51,9 @@ public class ChatInputListener implements Listener {
             case "COMMAND" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_COMMAND));
             case "CUSTOM_TYPE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CUSTOM_TYPE));
             case "NPC_PRESET" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_PRESET));
+            case "NPC_CREATE_PLAYER" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_PLAYER));
+            case "NPC_CREATE_MM" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_MM));
+            case "NPC_CREATE_ME" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_ME));
             case "STATE", "STOP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_ANIMATION));
             case "REMAP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_REMAP));
             case "CHANGEPART" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CHANGEPART));
@@ -80,11 +83,19 @@ public class ChatInputListener implements Listener {
                 return;
             }
 
-            if (context.type.equals("NPC_PRESET")) {
-                if (saveNpcPreset(player, message)) {
-                    player.sendMessage(lang.getPrefixed(LangKey.MSG_NPC_PRESET_SAVED));
-                }
-                plugin.getGuiManager().openNpcPresetMenu(player, 0);
+            if (context.type.equals("NPC_PRESET")
+                    || context.type.equals("NPC_CREATE_PLAYER")
+                    || context.type.equals("NPC_CREATE_MM")
+                    || context.type.equals("NPC_CREATE_ME")) {
+                boolean ok = switch (context.type) {
+                    case "NPC_CREATE_PLAYER" -> saveNpcCreatePlayer(player, message);
+                    case "NPC_CREATE_MM" -> saveNpcCreateProvider(player, message, "mythicmobs");
+                    case "NPC_CREATE_ME" -> saveNpcCreateProvider(player, message, "modelengine");
+                    default -> saveNpcPreset(player, message);
+                };
+                if (ok) player.sendMessage(lang.getPrefixed(LangKey.MSG_NPC_PRESET_SAVED));
+                boolean pick = "true".equalsIgnoreCase(getMetadata(player, "npc_pick_mode"));
+                plugin.getGuiManager().openNpcPresetMenu(player, 0, pick);
                 return;
             }
 
@@ -157,11 +168,55 @@ public class ChatInputListener implements Listener {
         });
     }
 
+    private boolean saveNpcCreatePlayer(Player player, String message) {
+        String raw = message == null ? "" : message.trim();
+        if (raw.isEmpty()) {
+            player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_PLAYER));
+            return false;
+        }
+        String[] parts = raw.split(":", 2);
+        String name = parts[0].trim();
+        String skin = parts.length > 1 && !parts[1].isBlank() ? parts[1].trim() : name;
+        if (name.isEmpty()) return false;
+        String id = uniqueNpcId(name);
+        var preset = new com.gmail.bobason01.cinematicmanager.data.NpcPreset(id);
+        preset.setProvider("vanilla");
+        preset.setEntityType("PLAYER");
+        preset.setName(name);
+        preset.setSkin(skin);
+        return plugin.getNpcPresetManager().save(preset);
+    }
+
+    private boolean saveNpcCreateProvider(Player player, String message, String provider) {
+        String mobId = message == null ? "" : message.trim();
+        if (mobId.isEmpty()) return false;
+        String id = uniqueNpcId(mobId);
+        var preset = new com.gmail.bobason01.cinematicmanager.data.NpcPreset(id);
+        preset.setProvider(provider);
+        preset.setMobId(mobId);
+        return plugin.getNpcPresetManager().save(preset);
+    }
+
+    private String uniqueNpcId(String raw) {
+        String base = raw.replaceAll("[^A-Za-z0-9_-]", "_");
+        while (base.startsWith("_")) base = base.substring(1);
+        if (base.isBlank()) base = "npc";
+        if (base.length() > 48) base = base.substring(0, 48);
+        String candidate = base;
+        int n = 2;
+        while (!plugin.getNpcPresetManager().isSafeId(candidate)
+                || plugin.getNpcPresetManager().getPreset(candidate) != null) {
+            String suffix = "_" + n++;
+            candidate = base.substring(0, Math.min(base.length(), 64 - suffix.length())) + suffix;
+        }
+        return candidate;
+    }
+
     private boolean saveNpcPreset(Player player, String message) {
-        // format: id;vanilla;PLAYER:Name:Skin  OR  id;mythicmobs;MobKey  OR  id;modelengine;ModelId
+        // Legacy format still accepted: id;vanilla;PLAYER:Name:Skin
         String[] parts = message.split(";", 3);
         if (parts.length < 3) {
-            player.sendMessage("§cFormat: id;vanilla;PLAYER:Name:Skin");
+            player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_NPC_PRESET));
             return false;
         }
         String id = parts[0].trim();

@@ -133,42 +133,13 @@ public final class ArmorStandSkillCodec {
 
     private static void appendItem(StringBuilder out, String slot, ItemStack item) {
         if (isEmpty(item)) return;
-        out.append(slot).append('=').append(item.getType().name());
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null && meta.hasCustomModelData()) {
-            out.append("#c=").append(meta.getCustomModelData());
-        }
-        out.append('|');
+        String enc = com.gmail.bobason01.cinematicmanager.data.NpcEquipment.encodeItem(item);
+        if (enc == null) return;
+        out.append(slot).append('=').append(enc).append('|');
     }
 
     private static ItemStack decodeItem(String val) {
-        if (val == null || val.isBlank() || val.equals("-")) return null;
-        String matName = val;
-        Integer cmd = null;
-        int hash = val.indexOf("#c=");
-        if (hash >= 0) {
-            matName = val.substring(0, hash);
-            try {
-                cmd = Integer.parseInt(val.substring(hash + 3));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        Material mat;
-        try {
-            mat = Material.valueOf(matName);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-        if (mat.isAir()) return null;
-        ItemStack stack = new ItemStack(mat);
-        if (cmd != null) {
-            ItemMeta meta = stack.getItemMeta();
-            if (meta != null) {
-                meta.setCustomModelData(cmd);
-                stack.setItemMeta(meta);
-            }
-        }
-        return stack;
+        return com.gmail.bobason01.cinematicmanager.data.NpcEquipment.decodeItem(val);
     }
 
     private static boolean isEmpty(ItemStack item) {

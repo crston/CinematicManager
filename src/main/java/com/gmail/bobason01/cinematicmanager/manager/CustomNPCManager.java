@@ -48,23 +48,30 @@ public class CustomNPCManager {
             return null;
         }
         ArmorStand as = createBase(loc);
-        // LibsDisguises owns the visible metadata for vanilla cinematic NPCs.
-        as.setInvisible(false);
+        // Base must stay invisible — if the disguise fails, a visible stand is what players see.
+        as.setInvisible(true);
+        as.setMarker(true);
         Disguise disguise;
 
         if (type.equalsIgnoreCase("PLAYER")) {
-            disguise = new PlayerDisguise(skin);
+            String skinName = (skin == null || skin.isBlank()) ? name : skin;
+            disguise = new PlayerDisguise(skinName);
             ((PlayerDisguise) disguise).setName(name);
         } else {
             try {
                 EntityType entityType = EntityType.valueOf(type.toUpperCase());
                 disguise = new MobDisguise(DisguiseType.getType(entityType));
             } catch (Exception e) {
-                disguise = new PlayerDisguise(skin);
+                String skinName = (skin == null || skin.isBlank()) ? name : skin;
+                disguise = new PlayerDisguise(skinName);
                 ((PlayerDisguise) disguise).setName(name);
             }
         }
 
+        try {
+            disguise.setEntity(as);
+        } catch (Throwable ignored) {
+        }
         disguise.getWatcher().setInvisible(false);
         disguise.getWatcher().setCustomNameVisible(true);
         if (!(disguise instanceof PlayerDisguise)) {
@@ -72,8 +79,19 @@ public class CustomNPCManager {
         }
 
         DisguiseAPI.disguiseToPlayers(as, disguise, viewer);
+        // Re-assert after disguise attach (some LD builds flip base flags).
+        as.setInvisible(true);
         viewer.showEntity(plugin, as);
         hideFromOthers(viewer, as);
+        final ArmorStand base = as;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!base.isValid()) return;
+            base.setInvisible(true);
+            if (!DisguiseAPI.isDisguised(base)) {
+                plugin.getLogger().warning("LibsDisguises failed to attach NPC disguise for viewer "
+                        + viewer.getName() + " — base armor stand stays hidden.");
+            }
+        });
         return as;
     }
 

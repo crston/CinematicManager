@@ -1,0 +1,11 @@
+{
+  "cinematicmanager.dialogue.typing": {
+    "sounds": [
+      {
+        "name": "minecraft:ui.button.click",
+        "volume": 0.4,
+        "pitch": 1.6
+      }
+    ]
+  }
+}

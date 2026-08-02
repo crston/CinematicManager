@@ -125,6 +125,7 @@ public class CinematicData implements Serializable {
                 type == CinematicAction.ActionType.ANIMATION ||
                 type == CinematicAction.ActionType.REMAP_MODEL ||
                 type == CinematicAction.ActionType.CHANGE_PART ||
+                type == CinematicAction.ActionType.EQUIP_NPC ||
                 type == CinematicAction.ActionType.HIDE_ENTITY ||
                 type == CinematicAction.ActionType.SHOW_ENTITY;
     }

@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="CinematicManager">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/artifacts/CinematicManager_jar/CinematicManager.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

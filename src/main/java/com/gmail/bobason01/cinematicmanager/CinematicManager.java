@@ -24,6 +24,7 @@ public class CinematicManager extends JavaPlugin {
     private GUIManager guiManager;
     private LangManager langManager;
     private ChatInputListener chatInputListener;
+    private EnvironmentPacketListener environmentPacketListener;
 
     @Override
     public void onEnable() {
@@ -45,7 +46,8 @@ public class CinematicManager extends JavaPlugin {
 
         registerListeners();
         registerCommands();
-        PacketEvents.getAPI().getEventManager().registerListener(new EnvironmentPacketListener(this));
+        this.environmentPacketListener = new EnvironmentPacketListener(this);
+        PacketEvents.getAPI().getEventManager().registerListener(environmentPacketListener);
 
         getLogger().info("CinematicManager has been enabled successfully.");
     }
@@ -98,12 +100,23 @@ public class CinematicManager extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (environmentPacketListener != null) {
+            try {
+                PacketEvents.getAPI().getEventManager().unregisterListener(environmentPacketListener);
+            } catch (Throwable ignored) {
+            }
+            environmentPacketListener = null;
+        }
+        if (environmentRecordManager != null) {
+            environmentRecordManager.shutdown();
+        }
         if (sessionManager != null) {
             sessionManager.shutdown();
         }
         if (configManager != null) {
             configManager.saveAll();
         }
+        instance = null;
         getLogger().info("CinematicManager has been disabled.");
     }
 

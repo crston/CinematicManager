@@ -2,6 +2,7 @@ package com.gmail.bobason01.cinematicmanager.io;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
+import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import org.bukkit.Bukkit;
@@ -294,6 +295,16 @@ public final class CinematicDefinitionService {
                 value = actors.get(actorId);
                 location = readLocation(map(map.get("location")), base + ".location", true, diagnostics);
                 if (value == null) required(diagnostics, base + ".source", "A valid source is required.");
+                NpcEquipment spawnEq = NpcEquipment.fromMap(map.get("equipment"));
+                extra = spawnEq.isEmpty() ? null : spawnEq.encode();
+            }
+            case EQUIP_NPC -> {
+                extra = resolveActor(map, actors, base, diagnostics);
+                NpcEquipment equip = NpcEquipment.fromMap(map.get("equipment"));
+                value = equip.isEmpty() ? "" : equip.encode();
+                if (equip.isEmpty()) {
+                    required(diagnostics, base + ".equipment", "equipment object is required.");
+                }
             }
             case MOVE_NPC -> {
                 value = requiredText(map, "pathId", base, diagnostics);
@@ -555,7 +566,7 @@ public final class CinematicDefinitionService {
                             "Environment clip '" + action.getValue() + "' does not exist."));
                 }
                 String target = switch (action.getType()) {
-                    case MOVE_NPC, ANIMATION, REMAP_MODEL, CHANGE_PART -> action.getExtra();
+                    case MOVE_NPC, ANIMATION, REMAP_MODEL, CHANGE_PART, EQUIP_NPC -> action.getExtra();
                     case HIDE_ENTITY -> action.getValue();
                     case SHOW_ENTITY -> action.getExtra() != null
                             ? action.getExtra() : action.getValue();
@@ -577,7 +588,7 @@ public final class CinematicDefinitionService {
                                     List<Diagnostic> diagnostics) {
         Set<String> allowed = new LinkedHashSet<>(Set.of("tick", "type"));
         switch (type) {
-            case SPAWN_NPC -> allowed.addAll(Set.of("actorId", "source", "location"));
+            case SPAWN_NPC -> allowed.addAll(Set.of("actorId", "source", "location", "equipment"));
             case MOVE_NPC -> allowed.addAll(Set.of("actorId", "pathId", "origin"));
             case CAMERA -> allowed.addAll(Set.of("mode", "pathId", "origin", "location"));
             case SOUND -> allowed.add("sound");
@@ -590,6 +601,7 @@ public final class CinematicDefinitionService {
             case ANIMATION -> allowed.addAll(Set.of("actorId", "animation"));
             case REMAP_MODEL -> allowed.addAll(Set.of("actorId", "model", "newModel", "map"));
             case CHANGE_PART -> allowed.addAll(Set.of("actorId", "model", "part", "newModel", "newPart"));
+            case EQUIP_NPC -> allowed.addAll(Set.of("actorId", "equipment"));
             case LIGHTNING -> allowed.add("location");
             case DIALOGUE -> allowed.addAll(Set.of("displayMode", "pages"));
             case WAIT -> allowed.addAll(Set.of("displayMode", "prompt"));
@@ -614,6 +626,14 @@ public final class CinematicDefinitionService {
                 out.put("actorId", actorIds.get(action.getValue()));
                 out.put("source", decodeSource(action.getValue()));
                 out.put("location", actionLocationMap(action));
+                NpcEquipment spawnEq = NpcEquipment.parse(action.getExtra());
+                if (!spawnEq.isEmpty()) out.put("equipment", spawnEq.toMap());
+            }
+            case EQUIP_NPC -> {
+                out.put("actorId",
+                        actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
+                NpcEquipment equip = NpcEquipment.parse(action.getValue());
+                out.put("equipment", equip.toMap());
             }
             case MOVE_NPC -> {
                 out.put("actorId", actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
@@ -699,6 +719,7 @@ public final class CinematicDefinitionService {
             case "STATE" -> CinematicAction.ActionType.ANIMATION;
             case "REMAP", "REMAPMODEL", "REMAP_MODEL" -> CinematicAction.ActionType.REMAP_MODEL;
             case "CHANGEPART", "CHANGE_PART" -> CinematicAction.ActionType.CHANGE_PART;
+            case "EQUIP", "EQUIPNPC", "EQUIP_NPC" -> CinematicAction.ActionType.EQUIP_NPC;
             case "GESTURE" -> null; // removed
             default -> {
                 try {
@@ -714,6 +735,7 @@ public final class CinematicDefinitionService {
         return switch (type) {
             case REMAP_MODEL -> "remap_model";
             case CHANGE_PART -> "change_part";
+            case EQUIP_NPC -> "equip_npc";
             default -> type.name().toLowerCase(Locale.ROOT);
         };
     }

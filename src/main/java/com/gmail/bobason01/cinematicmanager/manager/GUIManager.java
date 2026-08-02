@@ -3,6 +3,8 @@ package com.gmail.bobason01.cinematicmanager.manager;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
+import com.gmail.bobason01.cinematicmanager.data.NpcPreset;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -15,6 +17,7 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
+import java.util.Locale;
 
 public class GUIManager {
 
@@ -42,20 +45,31 @@ public class GUIManager {
     }
 
     public void openNpcPresetMenu(Player player, int page) {
+        openNpcPresetMenu(player, page, false);
+    }
+
+    /** @param pickMode true = insert into open cinematic; false = manage library */
+    public void openNpcPresetMenu(Player player, int page, boolean pickMode) {
         LangManager lang = plugin.getLangManager();
-        Inventory inv = Bukkit.createInventory(null, 54, lang.get(LangKey.MENU_NPC_PRESET));
-        List<com.gmail.bobason01.cinematicmanager.data.NpcPreset> presets =
-                new ArrayList<>(plugin.getNpcPresetManager().all());
-        presets.sort(Comparator.comparing(com.gmail.bobason01.cinematicmanager.data.NpcPreset::getId));
+        String title = pickMode ? lang.get(LangKey.MENU_NPC_PICK) : lang.get(LangKey.MENU_NPC_PRESET);
+        Inventory inv = Bukkit.createInventory(null, 54, title);
+        List<NpcPreset> presets = new ArrayList<>(plugin.getNpcPresetManager().all());
+        presets.sort(Comparator.comparing(NpcPreset::getId));
         int start = page * 45;
         for (int i = 0; i < 45 && start + i < presets.size(); i++) {
-            var preset = presets.get(start + i);
+            NpcPreset preset = presets.get(start + i);
+            String detail = switch (preset.getProvider().toLowerCase(Locale.ROOT)) {
+                case "mythicmobs", "modelengine" -> preset.getMobId();
+                default -> preset.getName() + (preset.getSkin() == null || preset.getSkin().isBlank()
+                        || preset.getSkin().equals(preset.getName()) ? "" : " / " + preset.getSkin());
+            };
             ItemStack item = createItem(Material.PLAYER_HEAD,
                     lang.format(LangKey.MENU_NPC_PRESET_NAME, "{id}", preset.getId()),
                     lang.format(LangKey.MENU_NPC_PRESET_INFO,
                             "{provider}", preset.getProvider(),
-                            "{detail}", preset.asSpawnValue()),
-                    LangKey.MENU_NPC_PRESET_USE_LORE,
+                            "{detail}", detail),
+                    pickMode ? LangKey.MENU_NPC_PICK_LORE : LangKey.MENU_NPC_MANAGE_LORE,
+                    LangKey.MENU_NPC_PRESET_EQUIP_LORE,
                     LangKey.MENU_NPC_PRESET_DELETE_LORE);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
@@ -69,6 +83,17 @@ public class GUIManager {
         inv.setItem(51, createItem(Material.EMERALD, lang.get(LangKey.MENU_NPC_PRESET_CREATE), LangKey.MENU_NPC_PRESET_CREATE_LORE));
         inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_NEXT)));
         player.setMetadata("npc_preset_page", new FixedMetadataValue(plugin, page));
+        player.setMetadata("npc_pick_mode", new FixedMetadataValue(plugin, pickMode));
+        player.openInventory(inv);
+    }
+
+    public void openNpcCreateTypeGUI(Player player) {
+        LangManager lang = plugin.getLangManager();
+        Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_NPC_CREATE_TYPE));
+        inv.setItem(11, createItem(Material.PLAYER_HEAD, lang.get(LangKey.MENU_NPC_CREATE_PLAYER), LangKey.MENU_NPC_CREATE_PLAYER_LORE));
+        inv.setItem(13, createItem(Material.ZOMBIE_SPAWN_EGG, lang.get(LangKey.MENU_NPC_CREATE_MM), LangKey.MENU_NPC_CREATE_MM_LORE));
+        inv.setItem(15, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_NPC_CREATE_ME), LangKey.MENU_NPC_CREATE_ME_LORE));
+        inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_LIST_BACK)));
         player.openInventory(inv);
     }
 
@@ -99,8 +124,23 @@ public class GUIManager {
             inv.setItem(i, createItem(Material.CLOCK, lang.format(LangKey.MENU_STUDIO_TIME, "{tick}", String.valueOf(tick)), lang.get(LangKey.MENU_STUDIO_CURRENT)));
 
             CinematicAction act = data.getActionByTrack(tick, CinematicAction.TrackType.ACTION);
-            if (act == null) inv.setItem(i + 9, createItem(Material.WHITE_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_ACTION), LangKey.MENU_STUDIO_ADD_ACTION_LORE));
-            else inv.setItem(i + 9, createItem(Material.ARMOR_STAND, lang.format(LangKey.MENU_STUDIO_ACTION_NAME, "{type}", act.getType().name()), lang.format(LangKey.MENU_STUDIO_ACTION_TARGET, "{target}", act.getExtra() != null ? act.getExtra() : act.getValue()), LangKey.MENU_STUDIO_DELETE_LORE));
+            if (act == null) {
+                inv.setItem(i + 9, createItem(Material.WHITE_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_ACTION), LangKey.MENU_STUDIO_ADD_ACTION_LORE));
+            } else {
+                Material actIcon = switch (act.getType()) {
+                    case EQUIP_NPC -> Material.IRON_CHESTPLATE;
+                    case SPAWN_NPC -> Material.PLAYER_HEAD;
+                    case MOVE_NPC -> Material.MINECART;
+                    case HIDE_ENTITY -> Material.ENDER_PEARL;
+                    case SHOW_ENTITY -> Material.ENDER_EYE;
+                    default -> Material.ARMOR_STAND;
+                };
+                inv.setItem(i + 9, createItem(actIcon,
+                        lang.format(LangKey.MENU_STUDIO_ACTION_NAME, "{type}", act.getType().name()),
+                        lang.format(LangKey.MENU_STUDIO_ACTION_TARGET, "{target}",
+                                act.getExtra() != null ? act.getExtra() : act.getValue()),
+                        LangKey.MENU_STUDIO_DELETE_LORE));
+            }
 
             CinematicAction cam = data.getActionByTrack(tick, CinematicAction.TrackType.CAMERA);
             if (cam == null) inv.setItem(i + 18, createItem(Material.YELLOW_STAINED_GLASS_PANE, lang.get(LangKey.MENU_STUDIO_ADD_CAMERA), LangKey.MENU_STUDIO_ADD_CAMERA_LORE));
@@ -145,6 +185,7 @@ public class GUIManager {
         inv.setItem(13, createItem(Material.GOLDEN_SWORD, lang.get(LangKey.MENU_ACTION_ANIMATION), LangKey.MENU_ACTION_ANIMATION_LORE));
         inv.setItem(15, createItem(Material.ENDER_PEARL, lang.get(LangKey.MENU_ACTION_HIDE), LangKey.MENU_ACTION_HIDE_LORE));
         inv.setItem(17, createItem(Material.ENDER_EYE, lang.get(LangKey.MENU_ACTION_SHOW), LangKey.MENU_ACTION_SHOW_LORE));
+        inv.setItem(19, createItem(Material.IRON_CHESTPLATE, lang.get(LangKey.MENU_ACTION_EQUIP), LangKey.MENU_ACTION_EQUIP_LORE));
         inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
         player.openInventory(inv);
     }
@@ -152,9 +193,10 @@ public class GUIManager {
     public void openSpawnTypeGUI(Player player, String id, int tick, int page) {
         LangManager lang = plugin.getLangManager();
         Inventory inv = Bukkit.createInventory(null, 27, lang.get(LangKey.MENU_SPAWN_TYPE));
-        inv.setItem(11, createItem(Material.ZOMBIE_HEAD, lang.get(LangKey.MENU_SPAWN_TYPE_NPC)));
-        inv.setItem(13, createItem(Material.ZOMBIE_SPAWN_EGG, lang.get(LangKey.MENU_SPAWN_TYPE_MM)));
-        inv.setItem(15, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_SPAWN_TYPE_ME)));
+        inv.setItem(10, createItem(Material.BOOKSHELF, lang.get(LangKey.MENU_SPAWN_TYPE_LIBRARY), LangKey.MENU_SPAWN_TYPE_LIBRARY_LORE));
+        inv.setItem(12, createItem(Material.PLAYER_HEAD, lang.get(LangKey.MENU_SPAWN_TYPE_NPC)));
+        inv.setItem(14, createItem(Material.ZOMBIE_SPAWN_EGG, lang.get(LangKey.MENU_SPAWN_TYPE_MM)));
+        inv.setItem(16, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_SPAWN_TYPE_ME)));
         inv.setItem(22, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
         player.openInventory(inv);
     }
@@ -247,6 +289,135 @@ public class GUIManager {
         inv.setItem(31, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_STUDIO_BACK)));
         player.openInventory(inv);
     }
+
+
+    /** Slot map for equip GUI: HEAD=4 OFF=12 CHEST=13 HAND=14 LEGS=22 FEET=31 DONE=30 CLEAR=32 BACK=35 */
+    public static final int[] EQUIP_SLOTS = {4, 13, 22, 31, 14, 12};
+
+    public void openNpcEquipGUI(Player player, String presetId) {
+        openNpcEquipGUI(player, presetId, null, null, -1);
+    }
+
+    /**
+     * @param actionNpcTarget when non-null, Save writes an EQUIP_NPC timeline action instead of preset.
+     */
+    public void openNpcEquipGUI(Player player, String presetId, String actionNpcTarget,
+                                  String cinematicId, int tick) {
+        LangManager lang = plugin.getLangManager();
+        NpcEquipment equipment;
+        String titleId;
+        if (actionNpcTarget != null) {
+            if (player.hasMetadata("equip_working")) {
+                String enc = null;
+                for (org.bukkit.metadata.MetadataValue v : player.getMetadata("equip_working")) {
+                    if (v.getOwningPlugin() != null && v.getOwningPlugin().equals(plugin)) {
+                        enc = v.asString();
+                        break;
+                    }
+                }
+                equipment = NpcEquipment.parse(enc);
+            } else {
+                equipment = new NpcEquipment();
+            }
+            titleId = "action";
+            player.setMetadata("equip_action_target", new FixedMetadataValue(plugin, actionNpcTarget));
+            if (cinematicId != null) player.setMetadata("edit_id", new FixedMetadataValue(plugin, cinematicId));
+            if (tick >= 0) player.setMetadata("edit_tick", new FixedMetadataValue(plugin, tick));
+            player.removeMetadata("equip_preset_id", plugin);
+        } else {
+            NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
+            if (preset == null) return;
+            // Prefer in-progress edits over saved preset gear.
+            if (player.hasMetadata("equip_working")) {
+                String enc = null;
+                for (org.bukkit.metadata.MetadataValue v : player.getMetadata("equip_working")) {
+                    if (v.getOwningPlugin() != null && v.getOwningPlugin().equals(plugin)) {
+                        enc = v.asString();
+                        break;
+                    }
+                }
+                equipment = NpcEquipment.parse(enc);
+            } else {
+                equipment = preset.getEquipment() == null ? new NpcEquipment() : preset.getEquipment();
+            }
+            titleId = presetId;
+            player.setMetadata("equip_preset_id", new FixedMetadataValue(plugin, presetId));
+            player.removeMetadata("equip_action_target", plugin);
+        }
+
+        Inventory inv = Bukkit.createInventory(null, 36, lang.format(LangKey.MENU_NPC_EQUIP, "{id}", titleId));
+        fillEquipPane(inv);
+        putEquipSlot(inv, 4, NpcEquipment.Slot.HEAD, equipment, lang);
+        putEquipSlot(inv, 13, NpcEquipment.Slot.CHEST, equipment, lang);
+        putEquipSlot(inv, 22, NpcEquipment.Slot.LEGS, equipment, lang);
+        putEquipSlot(inv, 31, NpcEquipment.Slot.FEET, equipment, lang);
+        putEquipSlot(inv, 14, NpcEquipment.Slot.HAND, equipment, lang);
+        putEquipSlot(inv, 12, NpcEquipment.Slot.OFF, equipment, lang);
+        inv.setItem(30, createItem(Material.LIME_CONCRETE, lang.get(LangKey.MENU_NPC_EQUIP_DONE)));
+        inv.setItem(32, createItem(Material.RED_CONCRETE, lang.get(LangKey.MENU_NPC_EQUIP_CLEAR), LangKey.MENU_NPC_EQUIP_HINT));
+        inv.setItem(35, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_NPC_BACK)));
+        player.openInventory(inv);
+    }
+
+    private void fillEquipPane(Inventory inv) {
+        ItemStack pane = createItem(Material.GRAY_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 36; i++) inv.setItem(i, pane);
+    }
+
+    private void putEquipSlot(Inventory inv, int slot, NpcEquipment.Slot eqSlot,
+                              NpcEquipment equipment, LangManager lang) {
+        ItemStack gear = equipment.getItem(eqSlot);
+        String slotName = switch (eqSlot) {
+            case HEAD -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_HEAD);
+            case CHEST -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_CHEST);
+            case LEGS -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_LEGS);
+            case FEET -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_FEET);
+            case HAND -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_HAND);
+            case OFF -> lang.get(LangKey.MENU_NPC_EQUIP_SLOT_OFF);
+        };
+        if (gear == null) {
+            // Light gray pane — NOT leather armor (that looked "already equipped").
+            inv.setItem(slot, createItem(
+                    Material.LIGHT_GRAY_STAINED_GLASS_PANE,
+                    slotName,
+                    LangKey.MENU_NPC_EQUIP_EMPTY,
+                    LangKey.MENU_NPC_EQUIP_HINT));
+            return;
+        }
+        ItemStack display = gear.clone();
+        ItemMeta meta = display.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(lang.get(LangKey.MENU_NPC_EQUIP_FILLED)
+                    .replace("{slot}", slotName)
+                    .replace("{item}", gear.getType().name()));
+            List<String> lore = new ArrayList<>();
+            lore.add(lang.format(LangKey.MENU_NPC_EQUIP_FILLED_LORE, "{item}", gear.getType().name()));
+            lore.addAll(lang.getList(LangKey.MENU_NPC_EQUIP_HINT));
+            meta.setLore(lore);
+            try {
+                org.bukkit.enchantments.Enchantment glow =
+                        org.bukkit.enchantments.Enchantment.getByKey(org.bukkit.NamespacedKey.minecraft("unbreaking"));
+                if (glow != null) meta.addEnchant(glow, 1, true);
+            } catch (Throwable ignored) {
+            }
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+            display.setItemMeta(meta);
+        }
+        inv.setItem(slot, display);
+    }
+
+    public NpcEquipment.Slot equipSlotAt(int rawSlot) {
+        return switch (rawSlot) {
+            case 4 -> NpcEquipment.Slot.HEAD;
+            case 13 -> NpcEquipment.Slot.CHEST;
+            case 22 -> NpcEquipment.Slot.LEGS;
+            case 31 -> NpcEquipment.Slot.FEET;
+            case 14 -> NpcEquipment.Slot.HAND;
+            case 12 -> NpcEquipment.Slot.OFF;
+            default -> null;
+        };
+    }
+
 
     private ItemStack createItem(Material material, String name, LangKey... loreKeys) {
         LangManager lang = plugin.getLangManager();

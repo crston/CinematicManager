@@ -33,14 +33,20 @@ public final class EnvironmentPacketListener extends PacketListenerAbstract {
 
     @Override
     public void onPacketSend(PacketSendEvent event) {
-        User user = event.getUser();
-        if (user == null || user.getUUID() == null) return;
-        Player player = Bukkit.getPlayer(user.getUUID());
-        if (player == null) return;
-        EnvironmentRecorder recorder = plugin.getEnvironmentRecordManager().get(player);
-        if (recorder == null) return;
-
         try {
+            // Hot-reload / disable race: PacketEvents may still hold this listener
+            // after the plugin JAR classloader is closed.
+            if (plugin == null || !plugin.isEnabled()) return;
+            EnvironmentRecordManager manager = plugin.getEnvironmentRecordManager();
+            if (manager == null || !manager.hasActive()) return;
+
+            User user = event.getUser();
+            if (user == null || user.getUUID() == null) return;
+            Player player = Bukkit.getPlayer(user.getUUID());
+            if (player == null) return;
+            EnvironmentRecorder recorder = manager.get(player);
+            if (recorder == null) return;
+
             if (event.getPacketType() == PacketType.Play.Server.PARTICLE) {
                 WrapperPlayServerParticle wrapper = new WrapperPlayServerParticle(event);
                 Particle<?> particle = wrapper.getParticle();
@@ -62,10 +68,12 @@ public final class EnvironmentPacketListener extends PacketListenerAbstract {
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
+                        if (!plugin.isEnabled()) return;
                         recorder.captureParticle(loc,
                                 org.bukkit.Particle.valueOf(name),
                                 count, ox, oy, oz, speed);
                     } catch (IllegalArgumentException ignored) {
+                    } catch (IllegalStateException ignored) {
                     }
                 });
             } else if (event.getPacketType() == PacketType.Play.Server.SOUND_EFFECT) {
@@ -76,14 +84,15 @@ public final class EnvironmentPacketListener extends PacketListenerAbstract {
 
                 Vector3d position = wrapper.getPosition();
                 if (position == null) return;
-                // Protocol stores block-scaled coords historically; PE 2.13 exposes world coords via Vector3d.
                 Location loc = new Location(player.getWorld(), position.getX(), position.getY(), position.getZ());
                 float volume = wrapper.getVolume();
                 float pitch = wrapper.getPitch();
                 String name = key.toString();
 
-                Bukkit.getScheduler().runTask(plugin, () ->
-                        recorder.captureSound(loc, name, volume, pitch));
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!plugin.isEnabled()) return;
+                    recorder.captureSound(loc, name, volume, pitch);
+                });
             } else if (event.getPacketType() == PacketType.Play.Server.ENTITY_SOUND_EFFECT) {
                 WrapperPlayServerEntitySoundEffect wrapper = new WrapperPlayServerEntitySoundEffect(event);
                 Sound sound = wrapper.getSound();
@@ -95,11 +104,13 @@ public final class EnvironmentPacketListener extends PacketListenerAbstract {
                 float pitch = wrapper.getPitch();
                 Location loc = player.getLocation();
 
-                Bukkit.getScheduler().runTask(plugin, () ->
-                        recorder.captureSound(loc, name, volume, pitch));
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!plugin.isEnabled()) return;
+                    recorder.captureSound(loc, name, volume, pitch);
+                });
             }
         } catch (Throwable ignored) {
-            // Packet shape can still vary; never break the send pipeline.
+            // Packet shape variance OR closed plugin classloader after reload.
         }
     }
 }

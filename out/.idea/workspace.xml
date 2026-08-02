@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="f347b196-71a9-4d83-9ef8-8cc0e7faeaff" name="변경" comment="">
+      <change beforePath="$PROJECT_DIR$/artifacts/CinematicManager_jar/CinematicManager.jar" beforeDir="false" afterPath="$PROJECT_DIR$/artifacts/CinematicManager_jar/CinematicManager.jar" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/CinematicManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/CinematicManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/data/CinematicAction.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/data/CinematicAction.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/data/NpcPreset.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/data/NpcPreset.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/fx/EnvironmentPacketListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/fx/EnvironmentPacketListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/fx/EnvironmentRecordManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/fx/EnvironmentRecordManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/io/CinematicDefinitionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/io/CinematicDefinitionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/listener/GUIListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/listener/GUIListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/CustomNPCManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/CustomNPCManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/GUIManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/GUIManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/LangKey.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/manager/LangKey.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/session/CinematicSession.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/gmail/bobason01/cinematicmanager/session/CinematicSession.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/ai/cinematic.schema.json" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/ai/cinematic.schema.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/ai/example.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/ai/example.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/language/en.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/language/en.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/language/ja.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/language/ja.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/language/ko.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/language/ko.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/resources/plugin.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/resources/plugin.yml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 8
+}]]></component>
+  <component name="ProjectId" id="3HLxhEjD0hIgfEPn7g7ghyNtqTJ" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "C:/Users/bobas/OneDrive/바탕 화면/개발/CinematicManager/out"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="디폴트 작업">
+      <changelist id="f347b196-71a9-4d83-9ef8-8cc0e7faeaff" name="변경" comment="" />
+      <created>1785661267512</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1785661267512</updated>
+    </task>
+    <servers />
+  </component>
+</project>

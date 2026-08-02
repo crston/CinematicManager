@@ -3,11 +3,13 @@ package com.gmail.bobason01.cinematicmanager.listener;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.NpcPreset;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
 import com.gmail.bobason01.cinematicmanager.manager.LangManager;
 import com.gmail.bobason01.cinematicmanager.manager.NpcPresetManager;
 import com.gmail.bobason01.cinematicmanager.session.RecordSession;
+import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Material;
@@ -38,6 +40,18 @@ public class GUIListener implements Listener {
         LangManager lang = plugin.getLangManager();
         if (event.getView() == null) return;
         String title = lang.sanitize(event.getView().getTitle());
+
+        // Equip GUI: top inventory only cancelled; bottom stays free for picking items.
+        String equipPrefix = lang.sanitize(lang.get(LangKey.MENU_NPC_EQUIP).split("\\{")[0]);
+        if (title.startsWith(equipPrefix)) {
+            if (event.getClickedInventory() != null
+                    && event.getClickedInventory().equals(event.getView().getTopInventory())) {
+                event.setCancelled(true);
+                handleNpcEquip(player, event);
+            }
+            return;
+        }
+
         ItemStack item = event.getCurrentItem();
         if (item == null || item.getType() == Material.AIR) return;
 
@@ -45,8 +59,12 @@ public class GUIListener implements Listener {
             event.setCancelled(true); handleMain(player, event.getSlot());
         } else if (title.startsWith(lang.sanitize(lang.get(LangKey.MENU_LIST)))) {
             event.setCancelled(true); handleList(player, event.getSlot(), item, event.getClick().isRightClick());
-        } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_NPC_PRESET)))) {
-            event.setCancelled(true); handleNpcPreset(player, event.getSlot(), item, event.getClick().isRightClick());
+        } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_NPC_PRESET)))
+                || title.equals(lang.sanitize(lang.get(LangKey.MENU_NPC_PICK)))) {
+            event.setCancelled(true); handleNpcPreset(player, event.getSlot(), item,
+                    event.getClick().isRightClick(), event.getClick().isShiftClick());
+        } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_NPC_CREATE_TYPE)))) {
+            event.setCancelled(true); handleNpcCreateType(player, event.getSlot());
         } else if (title.startsWith(lang.sanitize(lang.get(LangKey.MENU_STUDIO).split("\\{")[0]))) {
             event.setCancelled(true); handleStudio(player, event.getSlot(), item, event.getClick().isRightClick());
         } else if (title.equals(lang.sanitize(lang.get(LangKey.MENU_ACTION)))) {
@@ -68,15 +86,16 @@ public class GUIListener implements Listener {
 
     private void handleMain(Player player, int slot) {
         if (slot == 11) plugin.getGuiManager().openCutsceneList(player, 0);
-        else if (slot == 13) plugin.getGuiManager().openNpcPresetMenu(player, 0);
+        else if (slot == 13) plugin.getGuiManager().openNpcPresetMenu(player, 0, false);
         else if (slot == 15) {
             player.closeInventory();
             plugin.getChatInputListener().startCreationInput(player);
         }
     }
 
-    private void handleNpcPreset(Player player, int slot, ItemStack item, boolean right) {
+    private void handleNpcPreset(Player player, int slot, ItemStack item, boolean right, boolean shift) {
         int page = getMetaInt(player, "npc_preset_page");
+        boolean pickMode = "true".equalsIgnoreCase(getMeta(player, "npc_pick_mode"));
         NpcPresetManager presets = plugin.getNpcPresetManager();
         if (presets == null) return;
 
@@ -87,39 +106,71 @@ public class GUIListener implements Listener {
             if (presetId == null) return;
             if (right) {
                 presets.deletePreset(presetId);
-                plugin.getGuiManager().openNpcPresetMenu(player, page);
+                plugin.getGuiManager().openNpcPresetMenu(player, page, pickMode);
                 return;
             }
             NpcPreset preset = presets.getPreset(presetId);
             if (preset == null) return;
-            String cinematicId = getMeta(player, "edit_id");
-            int insertTick = getMetaInt(player, "edit_tick");
-            if (cinematicId != null && !cinematicId.isBlank()) {
+
+            if (pickMode) {
+                String cinematicId = getMeta(player, "edit_id");
+                int insertTick = getMetaInt(player, "edit_tick");
+                if (cinematicId == null || cinematicId.isBlank()) {
+                    plugin.getGuiManager().openNpcPresetMenu(player, page, false);
+                    return;
+                }
                 CinematicData data = plugin.getDataManager().getCinematic(cinematicId);
-                if (data != null) {
-                    data.addAction(insertTick, new CinematicAction(
-                            CinematicAction.ActionType.SPAWN_NPC,
-                            preset.asSpawnValue(),
-                            player.getLocation(),
-                            null));
-                    plugin.getDataManager().saveCinematic(data);
-                    player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_PRESET_INSERTED));
+                if (data == null) return;
+                data.addAction(insertTick, new CinematicAction(
+                        CinematicAction.ActionType.SPAWN_NPC,
+                        preset.asSpawnValue(),
+                        player.getLocation(),
+                        preset.asEquipmentExtra()));
+                plugin.getDataManager().saveCinematic(data);
+                player.removeMetadata("npc_pick_mode", plugin);
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_PRESET_INSERTED));
+                plugin.getGuiManager().openStudioGUI(player, cinematicId, getMetaInt(player, "edit_page"));
+                return;
+            }
+
+            // Manage mode: left/shift = equip
+            player.removeMetadata("equip_working", plugin);
+            player.removeMetadata("equip_action_target", plugin);
+            plugin.getGuiManager().openNpcEquipGUI(player, presetId);
+        } else if (slot == 45 && page > 0) {
+            plugin.getGuiManager().openNpcPresetMenu(player, page - 1, pickMode);
+        } else if (slot == 53) {
+            plugin.getGuiManager().openNpcPresetMenu(player, page + 1, pickMode);
+        } else if (slot == 49) {
+            if (pickMode) {
+                String cinematicId = getMeta(player, "edit_id");
+                if (cinematicId != null && !cinematicId.isBlank()) {
                     plugin.getGuiManager().openStudioGUI(player, cinematicId, getMetaInt(player, "edit_page"));
                     return;
                 }
             }
-            player.sendMessage(plugin.getLangManager().format(LangKey.MSG_NPC_PRESET_SELECTED,
-                    "{id}", presetId, "{value}", preset.asSpawnValue()));
-        } else if (slot == 45 && page > 0) {
-            plugin.getGuiManager().openNpcPresetMenu(player, page - 1);
-        } else if (slot == 53) {
-            plugin.getGuiManager().openNpcPresetMenu(player, page + 1);
-        } else if (slot == 49) {
+            player.removeMetadata("npc_pick_mode", plugin);
             plugin.getGuiManager().openMainMenu(player);
         } else if (slot == 51) {
-            player.closeInventory();
-            plugin.getChatInputListener().startTrackInput(player, "_preset_", "NPC_PRESET", 0);
+            plugin.getGuiManager().openNpcCreateTypeGUI(player);
         }
+    }
+
+    private void handleNpcCreateType(Player player, int slot) {
+        boolean pickMode = "true".equalsIgnoreCase(getMeta(player, "npc_pick_mode"));
+        if (slot == 22) {
+            plugin.getGuiManager().openNpcPresetMenu(player, getMetaInt(player, "npc_preset_page"), pickMode);
+            return;
+        }
+        String type = switch (slot) {
+            case 11 -> "NPC_CREATE_PLAYER";
+            case 13 -> "NPC_CREATE_MM";
+            case 15 -> "NPC_CREATE_ME";
+            default -> null;
+        };
+        if (type == null) return;
+        player.closeInventory();
+        plugin.getChatInputListener().startTrackInput(player, "_preset_", type, 0);
     }
 
     private void handleList(Player player, int slot, ItemStack item, boolean right) {
@@ -162,7 +213,7 @@ public class GUIListener implements Listener {
                 case 50 -> plugin.getSessionManager().stopSession(player);
                 case 52 -> {
                     player.setMetadata("edit_tick", new FixedMetadataValue(plugin, page * 180));
-                    plugin.getGuiManager().openNpcPresetMenu(player, 0);
+                    plugin.getGuiManager().openNpcPresetMenu(player, 0, true);
                 }
                 case 53 -> plugin.getGuiManager().openStudioGUI(player, id, page + 1);
             }
@@ -205,6 +256,7 @@ public class GUIListener implements Listener {
             case 13 -> plugin.getGuiManager().openAnimationSelectGUI(player, id, t, p);
             case 15 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "HIDE")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "HIDE"); }
             case 17 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "SHOW")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "SHOW"); }
+            case 19 -> { player.setMetadata("edit_mode", new FixedMetadataValue(plugin, "EQUIP")); plugin.getGuiManager().openNPCListGUI(player, id, t, p, "EQUIP"); }
             case 22 -> plugin.getGuiManager().openStudioGUI(player, id, p);
         }
     }
@@ -212,9 +264,14 @@ public class GUIListener implements Listener {
     private void handleSpawnType(Player player, int slot) {
         String id = getMeta(player, "edit_id");
         int t = getMetaInt(player, "edit_tick"), p = getMetaInt(player, "edit_page");
-        if (slot == 11) plugin.getGuiManager().openNPCTypeGUI(player, id, t, p);
-        else if (slot == 13) { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "mythicmobs:"); }
-        else if (slot == 15) { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "modelengine:"); }
+        if (slot == 10) {
+            if (plugin.getNpcPresetManager().all().isEmpty()) {
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_LIBRARY_EMPTY));
+            }
+            plugin.getGuiManager().openNpcPresetMenu(player, 0, true);
+        } else if (slot == 12) plugin.getGuiManager().openNPCTypeGUI(player, id, t, p);
+        else if (slot == 14) { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "mythicmobs:"); }
+        else if (slot == 16) { player.closeInventory(); plugin.getChatInputListener().startTrackInput(player, id, "SPAWN", t, "modelengine:"); }
         else if (slot == 22) plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
     }
 
@@ -273,6 +330,10 @@ public class GUIListener implements Listener {
                     new RecordSession(plugin, player, id, t, CinematicAction.ActionType.MOVE_NPC, target).start();
                 }
             }.runTask(plugin);
+        } else if (mode.equals("EQUIP")) {
+            player.removeMetadata("equip_working", plugin);
+            player.removeMetadata("equip_preset_id", plugin);
+            plugin.getGuiManager().openNpcEquipGUI(player, null, target, id, t);
         } else if (mode.equals("STATE") || mode.equals("STOP")
                 || mode.equals("REMAP") || mode.equals("CHANGEPART")) {
             player.closeInventory();
@@ -292,6 +353,128 @@ public class GUIListener implements Listener {
             plugin.getGuiManager().openStudioGUI(player, id, p);
         }
     }
+
+
+    private void handleNpcEquip(Player player, InventoryClickEvent event) {
+        int slot = event.getRawSlot();
+        if (slot == 35) {
+            finishEquipBack(player);
+            return;
+        }
+        if (slot == 30) {
+            saveEquip(player);
+            return;
+        }
+        if (slot == 32) {
+            NpcEquipment eq = currentEquipWorking(player);
+            eq.clearAll();
+            storeEquipWorking(player, eq);
+            reopenEquip(player);
+            return;
+        }
+        NpcEquipment.Slot eqSlot = plugin.getGuiManager().equipSlotAt(slot);
+        if (eqSlot == null) return;
+
+        NpcEquipment eq = currentEquipWorking(player);
+        ItemStack cursor = event.getCursor();
+        if (cursor != null && cursor.getType() != Material.AIR && cursor.getAmount() > 0) {
+            // Copy only — do not consume the player's item.
+            eq.setItem(eqSlot, cursor);
+            player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                    TextComponent.fromLegacyText(plugin.getLangManager().format(
+                            LangKey.MSG_NPC_EQUIP_SET, "{item}", cursor.getType().name())));
+        } else {
+            eq.clear(eqSlot);
+            player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                    TextComponent.fromLegacyText(plugin.getLangManager().get(LangKey.MSG_NPC_EQUIP_CLEARED)));
+        }
+        storeEquipWorking(player, eq);
+        reopenEquip(player);
+    }
+
+    private NpcEquipment currentEquipWorking(Player player) {
+        String encoded = getMeta(player, "equip_working");
+        if (encoded != null) return NpcEquipment.parse(encoded);
+        String presetId = getMeta(player, "equip_preset_id");
+        if (presetId != null) {
+            NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
+            if (preset != null && preset.getEquipment() != null) {
+                return NpcEquipment.parse(preset.getEquipment().encode());
+            }
+        }
+        return new NpcEquipment();
+    }
+
+    private void storeEquipWorking(Player player, NpcEquipment eq) {
+        String enc = eq.encode();
+        player.setMetadata("equip_working", new FixedMetadataValue(plugin, enc == null ? "" : enc));
+    }
+
+    private void reopenEquip(Player player) {
+        String presetId = getMeta(player, "equip_preset_id");
+        String actionTarget = getMeta(player, "equip_action_target");
+        NpcEquipment working = currentEquipWorking(player);
+        storeEquipWorking(player, working);
+        if (presetId != null) {
+            plugin.getGuiManager().openNpcEquipGUI(player, presetId);
+            return;
+        }
+        if (actionTarget != null) {
+            String id = getMeta(player, "edit_id");
+            int tick = getMetaInt(player, "edit_tick");
+            plugin.getGuiManager().openNpcEquipGUI(player, null, actionTarget, id, tick);
+        }
+    }
+
+    private void saveEquip(Player player) {
+        NpcEquipment eq = currentEquipWorking(player);
+        String presetId = getMeta(player, "equip_preset_id");
+        String actionTarget = getMeta(player, "equip_action_target");
+        if (presetId != null) {
+            NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
+            if (preset != null) {
+                preset.setEquipment(eq);
+                plugin.getNpcPresetManager().save(preset);
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_EQUIP_SAVED));
+            }
+            player.removeMetadata("equip_working", plugin);
+            player.removeMetadata("equip_preset_id", plugin);
+            plugin.getGuiManager().openNpcPresetMenu(player, getMetaInt(player, "npc_preset_page"), false);
+            return;
+        }
+        if (actionTarget != null) {
+            String id = getMeta(player, "edit_id");
+            int tick = getMetaInt(player, "edit_tick");
+            int page = getMetaInt(player, "edit_page");
+            CinematicData data = plugin.getDataManager().getCinematic(id);
+            if (data != null) {
+                String encoded = eq.encode();
+                if (encoded == null) encoded = "";
+                data.addAction(tick, new CinematicAction(
+                        CinematicAction.ActionType.EQUIP_NPC, encoded, player.getLocation(), actionTarget));
+                plugin.getDataManager().saveCinematic(data);
+                player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_EQUIP_ADDED));
+            }
+            player.removeMetadata("equip_working", plugin);
+            player.removeMetadata("equip_action_target", plugin);
+            plugin.getGuiManager().openStudioGUI(player, id, page);
+        }
+    }
+
+    private void finishEquipBack(Player player) {
+        player.removeMetadata("equip_working", plugin);
+        String presetId = getMeta(player, "equip_preset_id");
+        if (presetId != null) {
+            // discard unsaved working copy — reload preset from disk state already in memory
+            player.removeMetadata("equip_preset_id", plugin);
+            plugin.getGuiManager().openNpcPresetMenu(player, getMetaInt(player, "npc_preset_page"), false);
+            return;
+        }
+        player.removeMetadata("equip_action_target", plugin);
+        String id = getMeta(player, "edit_id");
+        plugin.getGuiManager().openStudioGUI(player, id, getMetaInt(player, "edit_page"));
+    }
+
 
     private String resolveNpcTarget(ItemStack item) {
         ItemMeta meta = item.getItemMeta();

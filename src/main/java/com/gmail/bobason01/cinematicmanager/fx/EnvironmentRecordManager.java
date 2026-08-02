@@ -42,4 +42,13 @@ public final class EnvironmentRecordManager {
     public void unregister(Player player) {
         clear(player);
     }
+
+    /** Fast gate for the PacketEvents hot path — avoid work when idle. */
+    public boolean hasActive() {
+        return !active.isEmpty();
+    }
+
+    public void shutdown() {
+        active.clear();
+    }
 }

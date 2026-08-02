@@ -3,6 +3,7 @@ package com.gmail.bobason01.cinematicmanager.session;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.api.event.CinematicEndEvent;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
+import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPlayer;
@@ -265,6 +266,7 @@ public class CinematicSession {
             case ANIMATION -> handleAnimation(action);
             case REMAP_MODEL -> handleRemapModel(action);
             case CHANGE_PART -> handleChangePart(action);
+            case EQUIP_NPC -> handleEquip(action);
             case DIALOGUE -> handleDialogue(action);
             case WAIT -> handleWait(action);
             case ENV_CLIP -> handleEnvironmentClip(action);
@@ -324,7 +326,24 @@ public class CinematicSession {
             String key = sanitize(action.getValue());
             activeEntities.put(key, npc);
             spawnLocations.put(key, loc);
+            String gear = action.getExtra();
+            if (gear != null) {
+                // Wait 1 tick so LibsDisguises finishes attaching before watcher gear apply.
+                final Entity spawned = npc;
+                Bukkit.getScheduler().runTaskLater(plugin, () -> applyEquipment(spawned, gear), 1L);
+            }
         }
+    }
+
+    private void handleEquip(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e == null) return;
+        applyEquipment(e, action.getValue());
+    }
+
+    private void applyEquipment(Entity entity, String encoded) {
+        if (encoded == null) return; // SPAWN without gear
+        NpcEquipment.parse(encoded).apply(entity, true);
     }
 
     private void handleNpcMove(CinematicAction action) {
