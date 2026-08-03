@@ -300,11 +300,14 @@ public final class CinematicDefinitionService {
             }
             case EQUIP_NPC -> {
                 extra = resolveActor(map, actors, base, diagnostics);
-                NpcEquipment equip = NpcEquipment.fromMap(map.get("equipment"));
-                value = equip.isEmpty() ? "" : equip.encode();
-                if (equip.isEmpty()) {
-                    required(diagnostics, base + ".equipment", "equipment object is required.");
+                // Empty equipment ({}) is valid — means unequip all slots.
+                Object rawEq = map.get("equipment");
+                if (rawEq == null) {
+                    required(diagnostics, base + ".equipment",
+                            "equipment object is required (use {} to clear all gear).");
                 }
+                NpcEquipment equip = NpcEquipment.fromMap(rawEq);
+                value = equip.isEmpty() ? "" : equip.encode();
             }
             case MOVE_NPC -> {
                 value = requiredText(map, "pathId", base, diagnostics);

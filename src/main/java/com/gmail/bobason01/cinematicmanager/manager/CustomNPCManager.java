@@ -186,6 +186,11 @@ public class CustomNPCManager {
 
         entity.teleport(loc);
 
+        var hmc = plugin.getHmcCosmeticsHook();
+        if (hmc != null && hmc.isEnabled()) {
+            hmc.syncBackpacks(entity);
+        }
+
         if (modelEngineEnabled) {
             ModeledEntity me = ModelEngineAPI.getModeledEntity(id);
             if (me != null) {
@@ -466,6 +471,8 @@ public class CustomNPCManager {
     public void remove(Entity entity) {
         if (entity == null) return;
         lastLocations.remove(entity.getUniqueId());
+        var hmc = plugin.getHmcCosmeticsHook();
+        if (hmc != null) hmc.clearAll(entity.getUniqueId());
         if (modelEngineEnabled) {
             try {
                 ModeledEntity me = ModelEngineAPI.getModeledEntity(entity.getUniqueId());

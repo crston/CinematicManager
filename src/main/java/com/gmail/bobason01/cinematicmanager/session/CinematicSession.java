@@ -3,6 +3,7 @@ package com.gmail.bobason01.cinematicmanager.session;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.api.event.CinematicEndEvent;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
+import com.gmail.bobason01.cinematicmanager.data.NpcCosmetics;
 import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
@@ -23,6 +24,8 @@ import org.bukkit.event.player.PlayerMoveEvent;
 
 import java.util.*;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 public class CinematicSession {
 
@@ -41,6 +44,9 @@ public class CinematicSession {
 
     private Location originLocation;
     private GameMode originalGameMode;
+    private boolean originalAllowFlight;
+    private boolean originalFlying;
+    private boolean originalCollidable;
 
     private final Map<String, Entity> activeEntities = new HashMap<>();
     private final Map<String, Location> spawnLocations = new HashMap<>();
@@ -104,17 +110,44 @@ public class CinematicSession {
         this.active = true;
         this.originLocation = player.getLocation().clone();
         this.originalGameMode = player.getGameMode();
+        this.originalAllowFlight = player.getAllowFlight();
+        this.originalFlying = player.isFlying();
+        this.originalCollidable = player.isCollidable();
         this.maxTick = schedule.length == 0 ? 0 : schedule[schedule.length - 1].tick;
         this.currentTick = 0;
         this.scheduleIndex = 0;
         this.clickProxyEnabled = plugin.getConfig().getBoolean("dialogue.click-proxy", true);
         cacheTypingConfig();
 
-        player.setGameMode(GameMode.SPECTATOR);
+        // Adventure+flight (not Spectator): invisible ArmorStands stay fully hidden.
+        // Spectator always ghosts invisible entities (MC-67905) — breaks HMC backpack stands.
+        enterCinematicViewerMode();
         Location cinematicOrigin = data.getOrigin();
         if (cinematicOrigin != null && cinematicOrigin.getWorld() != null) {
             player.teleport(cinematicOrigin);
         }
+    }
+
+    /**
+     * Free camera without Spectator so HMC-style invisible ArmorStand backpacks do not ghost.
+     */
+    private void enterCinematicViewerMode() {
+        player.setGameMode(GameMode.ADVENTURE);
+        player.setAllowFlight(true);
+        player.setFlying(true);
+        player.setCollidable(false);
+        player.setInvisible(true);
+        player.addPotionEffect(new PotionEffect(
+                PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false, false));
+    }
+
+    private void leaveCinematicViewerMode() {
+        player.removePotionEffect(PotionEffectType.INVISIBILITY);
+        player.setInvisible(false);
+        player.setCollidable(originalCollidable);
+        player.setGameMode(originalGameMode);
+        player.setAllowFlight(originalAllowFlight);
+        player.setFlying(originalAllowFlight && originalFlying);
     }
 
     private void cacheTypingConfig() {
@@ -342,8 +375,30 @@ public class CinematicSession {
     }
 
     private void applyEquipment(Entity entity, String encoded) {
-        if (encoded == null) return; // SPAWN without gear
-        NpcEquipment.parse(encoded).apply(entity, true);
+        if (encoded == null) return; // SPAWN without gear/cosmetics — leave as-is
+        String eqPart = NpcCosmetics.equipmentPart(encoded);
+        NpcCosmetics cos = NpcCosmetics.cosmeticsPart(encoded);
+
+        // EQUIP with empty value (or clear-all) must strip every slot.
+        boolean gearReplaced;
+        if (encoded.isBlank()) {
+            new NpcEquipment().apply(entity, true);
+            gearReplaced = true;
+        } else if (eqPart != null) {
+            NpcEquipment.parse(eqPart).apply(entity, true);
+            gearReplaced = true;
+        } else if (encoded.startsWith(NpcCosmetics.EXTRA_PREFIX)) {
+            // cosmetics-only wire — do not touch current gear
+            gearReplaced = false;
+        } else {
+            NpcEquipment.parse(encoded).apply(entity, true);
+            gearReplaced = true;
+        }
+
+        var hmc = plugin.getHmcCosmeticsHook();
+        if (hmc != null && hmc.isEnabled()) {
+            hmc.apply(entity, player, cos, gearReplaced);
+        }
     }
 
     private void handleNpcMove(CinematicAction action) {
@@ -425,9 +480,13 @@ public class CinematicSession {
             player.teleport(cameraScratch);
             return true;
         }
+        // Path finished → lock at last frame like static camera (no free look until next CAMERA / end).
         if (cameraRelative != null && cameraStep >= cameraRelative.length) {
+            Location last = player.getLocation().clone();
             cameraRelative = null;
             cameraOrigin = null;
+            staticCameraLoc = last;
+            staticCameraApplied = true;
         }
         return false;
     }
@@ -885,7 +944,7 @@ public class CinematicSession {
         if (player.isOnline()) {
             player.sendTitle("", "", 0, 1, 0);
             sendActionBar("");
-            player.setGameMode(originalGameMode);
+            leaveCinematicViewerMode();
             player.teleport(originLocation);
         } else {
             plugin.getSessionManager().queuePlayerRestore(

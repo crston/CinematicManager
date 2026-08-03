@@ -3,6 +3,7 @@ package com.gmail.bobason01.cinematicmanager.listener;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.data.NpcCosmetics;
 import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.NpcPreset;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
@@ -49,6 +50,20 @@ public class GUIListener implements Listener {
                 event.setCancelled(true);
                 handleNpcEquip(player, event);
             }
+            return;
+        }
+
+        String cosmeticsPrefix = lang.sanitize(lang.get(LangKey.MENU_NPC_COSMETICS).split("\\{")[0]);
+        if (title.startsWith(cosmeticsPrefix)) {
+            event.setCancelled(true);
+            handleNpcCosmetics(player, event);
+            return;
+        }
+
+        String cosmeticPickPrefix = lang.sanitize(lang.get(LangKey.MENU_NPC_COSMETIC_PICK).split("\\{")[0]);
+        if (title.startsWith(cosmeticPickPrefix)) {
+            event.setCancelled(true);
+            handleNpcCosmeticPick(player, event);
             return;
         }
 
@@ -133,10 +148,16 @@ public class GUIListener implements Listener {
                 return;
             }
 
-            // Manage mode: left/shift = equip
-            player.removeMetadata("equip_working", plugin);
-            player.removeMetadata("equip_action_target", plugin);
-            plugin.getGuiManager().openNpcEquipGUI(player, presetId);
+            // Manage mode: shift+left = equip, left = edit type/name/skin (or mob id)
+            if (shift) {
+                player.removeMetadata("equip_working", plugin);
+                player.removeMetadata("cosmetics_working", plugin);
+                player.removeMetadata("equip_action_target", plugin);
+                plugin.getGuiManager().openNpcEquipGUI(player, presetId);
+                return;
+            }
+            player.closeInventory();
+            plugin.getChatInputListener().startNpcPresetEdit(player, presetId);
         } else if (slot == 45 && page > 0) {
             plugin.getGuiManager().openNpcPresetMenu(player, page - 1, pickMode);
         } else if (slot == 53) {
@@ -332,6 +353,7 @@ public class GUIListener implements Listener {
             }.runTask(plugin);
         } else if (mode.equals("EQUIP")) {
             player.removeMetadata("equip_working", plugin);
+            player.removeMetadata("cosmetics_working", plugin);
             player.removeMetadata("equip_preset_id", plugin);
             plugin.getGuiManager().openNpcEquipGUI(player, null, target, id, t);
         } else if (mode.equals("STATE") || mode.equals("STOP")
@@ -369,7 +391,16 @@ public class GUIListener implements Listener {
             NpcEquipment eq = currentEquipWorking(player);
             eq.clearAll();
             storeEquipWorking(player, eq);
+            player.setMetadata("cosmetics_working", new FixedMetadataValue(plugin, ""));
             reopenEquip(player);
+            return;
+        }
+        if (slot == 33) {
+            var hmc = plugin.getHmcCosmeticsHook();
+            if (hmc != null && hmc.isEnabled()) {
+                player.setMetadata("cosmetic_slots_page", new FixedMetadataValue(plugin, 0));
+                plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            }
             return;
         }
         NpcEquipment.Slot eqSlot = plugin.getGuiManager().equipSlotAt(slot);
@@ -428,17 +459,18 @@ public class GUIListener implements Listener {
 
     private void saveEquip(Player player) {
         NpcEquipment eq = currentEquipWorking(player);
+        NpcCosmetics cos = currentCosmeticsWorking(player);
         String presetId = getMeta(player, "equip_preset_id");
         String actionTarget = getMeta(player, "equip_action_target");
         if (presetId != null) {
             NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
             if (preset != null) {
                 preset.setEquipment(eq);
+                preset.setCosmetics(cos);
                 plugin.getNpcPresetManager().save(preset);
                 player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_EQUIP_SAVED));
             }
-            player.removeMetadata("equip_working", plugin);
-            player.removeMetadata("equip_preset_id", plugin);
+            clearEquipMeta(player);
             plugin.getGuiManager().openNpcPresetMenu(player, getMetaInt(player, "npc_preset_page"), false);
             return;
         }
@@ -448,31 +480,133 @@ public class GUIListener implements Listener {
             int page = getMetaInt(player, "edit_page");
             CinematicData data = plugin.getDataManager().getCinematic(id);
             if (data != null) {
-                String encoded = eq.encode();
+                String encoded = NpcCosmetics.mergeExtra(eq.encode(), cos);
                 if (encoded == null) encoded = "";
                 data.addAction(tick, new CinematicAction(
                         CinematicAction.ActionType.EQUIP_NPC, encoded, player.getLocation(), actionTarget));
                 plugin.getDataManager().saveCinematic(data);
                 player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_NPC_EQUIP_ADDED));
             }
-            player.removeMetadata("equip_working", plugin);
-            player.removeMetadata("equip_action_target", plugin);
+            clearEquipMeta(player);
             plugin.getGuiManager().openStudioGUI(player, id, page);
         }
     }
 
     private void finishEquipBack(Player player) {
-        player.removeMetadata("equip_working", plugin);
         String presetId = getMeta(player, "equip_preset_id");
+        clearEquipMeta(player);
         if (presetId != null) {
-            // discard unsaved working copy — reload preset from disk state already in memory
-            player.removeMetadata("equip_preset_id", plugin);
             plugin.getGuiManager().openNpcPresetMenu(player, getMetaInt(player, "npc_preset_page"), false);
             return;
         }
-        player.removeMetadata("equip_action_target", plugin);
         String id = getMeta(player, "edit_id");
         plugin.getGuiManager().openStudioGUI(player, id, getMetaInt(player, "edit_page"));
+    }
+
+    private void clearEquipMeta(Player player) {
+        player.removeMetadata("equip_working", plugin);
+        player.removeMetadata("cosmetics_working", plugin);
+        player.removeMetadata("equip_preset_id", plugin);
+        player.removeMetadata("equip_action_target", plugin);
+        player.removeMetadata("cosmetic_pick_slot", plugin);
+        player.removeMetadata("cosmetic_pick_page", plugin);
+        player.removeMetadata("cosmetic_slots_page", plugin);
+    }
+
+    private NpcCosmetics currentCosmeticsWorking(Player player) {
+        String encoded = getMeta(player, "cosmetics_working");
+        if (encoded != null) return NpcCosmetics.parse(encoded);
+        String presetId = getMeta(player, "equip_preset_id");
+        if (presetId != null) {
+            NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
+            if (preset != null && preset.getCosmetics() != null) {
+                return NpcCosmetics.parse(preset.getCosmetics().encode());
+            }
+        }
+        return new NpcCosmetics();
+    }
+
+    private void storeCosmeticsWorking(Player player, NpcCosmetics cos) {
+        String enc = cos == null || cos.isEmpty() ? "" : cos.encode();
+        player.setMetadata("cosmetics_working", new FixedMetadataValue(plugin, enc == null ? "" : enc));
+    }
+
+    private void handleNpcCosmetics(Player player, InventoryClickEvent event) {
+        int slot = event.getRawSlot();
+        if (slot == 49) {
+            reopenEquip(player);
+            return;
+        }
+        if (slot == 45) {
+            int page = Math.max(0, getMetaInt(player, "cosmetic_slots_page") - 1);
+            player.setMetadata("cosmetic_slots_page", new FixedMetadataValue(plugin, page));
+            plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            return;
+        }
+        if (slot == 53) {
+            int page = getMetaInt(player, "cosmetic_slots_page") + 1;
+            player.setMetadata("cosmetic_slots_page", new FixedMetadataValue(plugin, page));
+            plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            return;
+        }
+        if (slot < 0 || slot >= 45) return;
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null || !clicked.hasItemMeta()) return;
+        String hmcSlot = clicked.getItemMeta().getPersistentDataContainer()
+                .get(plugin.getGuiManager().getHmcSlotKey(), PersistentDataType.STRING);
+        if (hmcSlot == null || hmcSlot.isBlank()) return;
+        if (event.getClick().isRightClick()) {
+            NpcCosmetics cos = currentCosmeticsWorking(player);
+            cos.clear(hmcSlot);
+            storeCosmeticsWorking(player, cos);
+            player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                    TextComponent.fromLegacyText(plugin.getLangManager().get(LangKey.MSG_NPC_COSMETIC_CLEARED)));
+            plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            return;
+        }
+        plugin.getGuiManager().openNpcCosmeticPicker(player, hmcSlot, 0);
+    }
+
+    private void handleNpcCosmeticPick(Player player, InventoryClickEvent event) {
+        int slot = event.getRawSlot();
+        String hmcSlot = getMeta(player, "cosmetic_pick_slot");
+        if (slot == 49) {
+            plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            return;
+        }
+        if (slot == 48) {
+            if (hmcSlot != null) {
+                NpcCosmetics cos = currentCosmeticsWorking(player);
+                cos.clear(hmcSlot);
+                storeCosmeticsWorking(player, cos);
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                        TextComponent.fromLegacyText(plugin.getLangManager().get(LangKey.MSG_NPC_COSMETIC_CLEARED)));
+            }
+            plugin.getGuiManager().openNpcCosmeticsGUI(player);
+            return;
+        }
+        if (slot == 45) {
+            int page = Math.max(0, getMetaInt(player, "cosmetic_pick_page") - 1);
+            plugin.getGuiManager().openNpcCosmeticPicker(player, hmcSlot, page);
+            return;
+        }
+        if (slot == 53) {
+            int page = getMetaInt(player, "cosmetic_pick_page") + 1;
+            plugin.getGuiManager().openNpcCosmeticPicker(player, hmcSlot, page);
+            return;
+        }
+        if (slot < 0 || slot >= 45) return;
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null || !clicked.hasItemMeta()) return;
+        String id = clicked.getItemMeta().getPersistentDataContainer()
+                .get(plugin.getGuiManager().getHmcIdKey(), PersistentDataType.STRING);
+        if (id == null || id.isBlank() || hmcSlot == null) return;
+        NpcCosmetics cos = currentCosmeticsWorking(player);
+        cos.set(hmcSlot, id);
+        storeCosmeticsWorking(player, cos);
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                TextComponent.fromLegacyText(plugin.getLangManager().format(LangKey.MSG_NPC_COSMETIC_SET, "{id}", id)));
+        plugin.getGuiManager().openNpcCosmeticsGUI(player);
     }
 
 

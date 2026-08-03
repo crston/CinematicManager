@@ -177,6 +177,36 @@ public final class NpcEquipment {
         apply(entity, true);
     }
 
+    /** Clear only specific equipment slots (HMC cosmetic overlay removal). */
+    public static void wipeSlots(Entity entity, java.util.Collection<Slot> toClear) {
+        if (entity == null || !entity.isValid() || toClear == null || toClear.isEmpty()) return;
+        try {
+            if (DisguiseAPI.isDisguised(entity)) {
+                Disguise disguise = DisguiseAPI.getDisguise(entity);
+                if (disguise != null && disguise.getWatcher() instanceof LivingWatcher living) {
+                    for (Slot s : toClear) {
+                        switch (s) {
+                            case HAND -> living.setItemInMainHand(null);
+                            case OFF -> living.setItemInOffHand(null);
+                            case HEAD -> living.setHelmet(null);
+                            case CHEST -> living.setChestplate(null);
+                            case LEGS -> living.setLeggings(null);
+                            case FEET -> living.setBoots(null);
+                        }
+                    }
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (entity instanceof ArmorStand) return;
+        if (entity instanceof LivingEntity living) {
+            EntityEquipment equipment = living.getEquipment();
+            if (equipment == null) return;
+            for (Slot s : toClear) equipment.setItem(s.bukkit, null);
+        }
+    }
+
     /** @param clearMissing when true, unset slots are cleared (full outfit replace). */
     public void apply(Entity entity, boolean clearMissing) {
         if (entity == null || !entity.isValid()) return;

@@ -14,6 +14,7 @@ public final class NpcPreset {
     private String skin;
     private String mobId;
     private NpcEquipment equipment = new NpcEquipment();
+    private NpcCosmetics cosmetics = new NpcCosmetics();
 
     public NpcPreset(String id) {
         this.id = id;
@@ -31,6 +32,7 @@ public final class NpcPreset {
     public String getSkin() { return skin; }
     public String getMobId() { return mobId; }
     public NpcEquipment getEquipment() { return equipment; }
+    public NpcCosmetics getCosmetics() { return cosmetics; }
 
     public void setProvider(String provider) { this.provider = provider == null ? "vanilla" : provider; }
     public void setEntityType(String entityType) { this.entityType = entityType == null ? "PLAYER" : entityType; }
@@ -39,6 +41,9 @@ public final class NpcPreset {
     public void setMobId(String mobId) { this.mobId = mobId == null ? "" : mobId; }
     public void setEquipment(NpcEquipment equipment) {
         this.equipment = equipment == null ? new NpcEquipment() : equipment;
+    }
+    public void setCosmetics(NpcCosmetics cosmetics) {
+        this.cosmetics = cosmetics == null ? new NpcCosmetics() : cosmetics;
     }
 
     /** Runtime spawn value consumed by CinematicSession.handleSpawn. */
@@ -57,9 +62,10 @@ public final class NpcPreset {
         };
     }
 
-    /** Equipment wire string for SPAWN_NPC action.extra (null when empty). */
+    /** Equipment + optional HMC cosmetics for SPAWN_NPC action.extra. */
     public String asEquipmentExtra() {
-        return equipment == null || equipment.isEmpty() ? null : equipment.encode();
+        String eq = equipment == null || equipment.isEmpty() ? null : equipment.encode();
+        return NpcCosmetics.mergeExtra(eq, cosmetics);
     }
 
     public void serialize(YamlConfiguration yaml) {
@@ -74,6 +80,11 @@ public final class NpcPreset {
             ConfigurationSection section = yaml.createSection("equipment");
             equipment.writeYaml(section);
         }
+        yaml.set("cosmetics", null);
+        if (cosmetics != null && !cosmetics.isEmpty()) {
+            ConfigurationSection section = yaml.createSection("cosmetics");
+            cosmetics.writeYaml(section);
+        }
     }
 
     public static NpcPreset deserialize(YamlConfiguration yaml, String fallbackId) {
@@ -85,6 +96,7 @@ public final class NpcPreset {
         preset.setSkin(yaml.getString("skin", ""));
         preset.setMobId(yaml.getString("mobId", ""));
         preset.setEquipment(NpcEquipment.fromYaml(yaml.getConfigurationSection("equipment")));
+        preset.setCosmetics(NpcCosmetics.fromYaml(yaml.getConfigurationSection("cosmetics")));
         return preset;
     }
 }

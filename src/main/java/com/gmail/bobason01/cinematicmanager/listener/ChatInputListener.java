@@ -32,6 +32,29 @@ public class ChatInputListener implements Listener {
         player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_INPUT_NAME));
     }
 
+    public void startNpcPresetEdit(Player player, String presetId) {
+        var preset = plugin.getNpcPresetManager().getPreset(presetId);
+        if (preset == null) return;
+        inputQueue.put(player, new InputContext("NPC_EDIT", presetId, 0, null, ""));
+        LangManager lang = plugin.getLangManager();
+        String provider = preset.getProvider() == null ? "vanilla" : preset.getProvider().toLowerCase();
+        switch (provider) {
+            case "mythicmobs" -> player.sendMessage(lang.format(
+                    LangKey.MSG_INPUT_NPC_EDIT_MM, "{id}", presetId, "{mob}",
+                    preset.getMobId() == null ? "" : preset.getMobId()));
+            case "modelengine" -> player.sendMessage(lang.format(
+                    LangKey.MSG_INPUT_NPC_EDIT_ME, "{id}", presetId, "{mob}",
+                    preset.getMobId() == null ? "" : preset.getMobId()));
+            default -> player.sendMessage(lang.format(
+                    LangKey.MSG_INPUT_NPC_EDIT_VANILLA, "{id}", presetId,
+                    "{type}", preset.getEntityType() == null ? "PLAYER" : preset.getEntityType(),
+                    "{name}", preset.getName() == null ? presetId : preset.getName(),
+                    "{skin}", preset.getSkin() == null || preset.getSkin().isBlank()
+                            ? (preset.getName() == null ? presetId : preset.getName())
+                            : preset.getSkin()));
+        }
+    }
+
     public void startTrackInput(Player player, String id, String type, int tick) {
         startTrackInput(player, id, type, tick, "");
     }
@@ -86,16 +109,23 @@ public class ChatInputListener implements Listener {
             if (context.type.equals("NPC_PRESET")
                     || context.type.equals("NPC_CREATE_PLAYER")
                     || context.type.equals("NPC_CREATE_MM")
-                    || context.type.equals("NPC_CREATE_ME")) {
+                    || context.type.equals("NPC_CREATE_ME")
+                    || context.type.equals("NPC_EDIT")) {
                 boolean ok = switch (context.type) {
                     case "NPC_CREATE_PLAYER" -> saveNpcCreatePlayer(player, message);
                     case "NPC_CREATE_MM" -> saveNpcCreateProvider(player, message, "mythicmobs");
                     case "NPC_CREATE_ME" -> saveNpcCreateProvider(player, message, "modelengine");
+                    case "NPC_EDIT" -> saveNpcEdit(player, message, context.id);
                     default -> saveNpcPreset(player, message);
                 };
                 if (ok) player.sendMessage(lang.getPrefixed(LangKey.MSG_NPC_PRESET_SAVED));
                 boolean pick = "true".equalsIgnoreCase(getMetadata(player, "npc_pick_mode"));
-                plugin.getGuiManager().openNpcPresetMenu(player, 0, pick);
+                int page = 0;
+                try {
+                    String pg = getMetadata(player, "npc_preset_page");
+                    if (pg != null) page = Integer.parseInt(pg);
+                } catch (NumberFormatException ignored) {}
+                plugin.getGuiManager().openNpcPresetMenu(player, page, pick);
                 return;
             }
 
@@ -166,6 +196,42 @@ public class ChatInputListener implements Listener {
             }
             plugin.getGuiManager().openStudioGUI(player, targetId, targetTick / 180);
         });
+    }
+
+    private boolean saveNpcEdit(Player player, String message, String presetId) {
+        var preset = plugin.getNpcPresetManager().getPreset(presetId);
+        if (preset == null) return false;
+        String raw = message == null ? "" : message.trim();
+        if (raw.isEmpty() || raw.equalsIgnoreCase("cancel") || raw.equals("-")) {
+            return false;
+        }
+        String provider = preset.getProvider() == null ? "vanilla" : preset.getProvider().toLowerCase();
+        switch (provider) {
+            case "mythicmobs", "modelengine" -> preset.setMobId(raw);
+            default -> {
+                String[] npc = raw.split(":", 3);
+                String type = npc[0].trim().toUpperCase();
+                try {
+                    EntityType.valueOf(type);
+                } catch (IllegalArgumentException e) {
+                    player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_ERROR_INVALID_TYPE));
+                    return false;
+                }
+                preset.setProvider("vanilla");
+                preset.setEntityType(type);
+                if (npc.length >= 2 && !npc[1].isBlank()) {
+                    preset.setName(npc[1].trim());
+                }
+                if (npc.length >= 3) {
+                    String skin = npc[2].trim();
+                    preset.setSkin(skin.isEmpty() ? preset.getName() : skin);
+                } else if (npc.length == 2 && !npc[1].isBlank()
+                        && (preset.getSkin() == null || preset.getSkin().isBlank())) {
+                    preset.setSkin(preset.getName());
+                }
+            }
+        }
+        return plugin.getNpcPresetManager().save(preset);
     }
 
     private boolean saveNpcCreatePlayer(Player player, String message) {

@@ -4,6 +4,7 @@ import com.gmail.bobason01.cinematicmanager.command.CinematicCommand;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPacketListener;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentRecordManager;
 import com.gmail.bobason01.cinematicmanager.hook.HookManager;
+import com.gmail.bobason01.cinematicmanager.hook.HmcCosmeticsHook;
 import com.gmail.bobason01.cinematicmanager.listener.*;
 import com.gmail.bobason01.cinematicmanager.manager.*;
 import com.github.retrooper.packetevents.PacketEvents;
@@ -21,6 +22,7 @@ public class CinematicManager extends JavaPlugin {
     private NpcPresetManager npcPresetManager;
     private EnvironmentRecordManager environmentRecordManager;
     private HookManager hookManager;
+    private HmcCosmeticsHook hmcCosmeticsHook;
     private GUIManager guiManager;
     private LangManager langManager;
     private ChatInputListener chatInputListener;
@@ -37,6 +39,7 @@ public class CinematicManager extends JavaPlugin {
         this.langManager = new LangManager(this);
         this.configManager = new ConfigManager(this);
         this.hookManager = new HookManager(this);
+        this.hmcCosmeticsHook = new HmcCosmeticsHook(this);
         this.npcManager = new CustomNPCManager(this);
         this.npcPresetManager = new NpcPresetManager(this);
         this.environmentRecordManager = new EnvironmentRecordManager(this);
@@ -107,6 +110,9 @@ public class CinematicManager extends JavaPlugin {
             }
             environmentPacketListener = null;
         }
+        if (hmcCosmeticsHook != null) {
+            hmcCosmeticsHook.shutdown();
+        }
         if (environmentRecordManager != null) {
             environmentRecordManager.shutdown();
         }
@@ -150,6 +156,10 @@ public class CinematicManager extends JavaPlugin {
 
     public HookManager getHookManager() {
         return hookManager;
+    }
+
+    public HmcCosmeticsHook getHmcCosmeticsHook() {
+        return hmcCosmeticsHook;
     }
 
     public GUIManager getGuiManager() {

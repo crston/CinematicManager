@@ -3,7 +3,9 @@ package com.gmail.bobason01.cinematicmanager.manager;
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.data.NpcCosmetics;
 import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
+import com.gmail.bobason01.cinematicmanager.hook.HmcCosmeticsHook;
 import com.gmail.bobason01.cinematicmanager.data.NpcPreset;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -25,15 +27,22 @@ public class GUIManager {
 
     private final CinematicManager plugin;
     private final NamespacedKey npcTargetKey;
+    private final NamespacedKey hmcSlotKey;
+    private final NamespacedKey hmcIdKey;
 
     public GUIManager(CinematicManager plugin) {
         this.plugin = plugin;
         this.npcTargetKey = new NamespacedKey(plugin, NPC_TARGET_KEY);
+        this.hmcSlotKey = new NamespacedKey(plugin, "hmc_slot");
+        this.hmcIdKey = new NamespacedKey(plugin, "hmc_id");
     }
 
     public NamespacedKey getNpcTargetKey() {
         return npcTargetKey;
     }
+
+    public NamespacedKey getHmcSlotKey() { return hmcSlotKey; }
+    public NamespacedKey getHmcIdKey() { return hmcIdKey; }
 
     public void openMainMenu(Player player) {
         LangManager lang = plugin.getLangManager();
@@ -355,8 +364,132 @@ public class GUIManager {
         putEquipSlot(inv, 12, NpcEquipment.Slot.OFF, equipment, lang);
         inv.setItem(30, createItem(Material.LIME_CONCRETE, lang.get(LangKey.MENU_NPC_EQUIP_DONE)));
         inv.setItem(32, createItem(Material.RED_CONCRETE, lang.get(LangKey.MENU_NPC_EQUIP_CLEAR), LangKey.MENU_NPC_EQUIP_HINT));
+        HmcCosmeticsHook hmc = plugin.getHmcCosmeticsHook();
+        if (hmc != null && hmc.isEnabled()) {
+            inv.setItem(33, createItem(Material.AMETHYST_SHARD, lang.get(LangKey.MENU_NPC_EQUIP_COSMETICS), LangKey.MENU_NPC_EQUIP_COSMETICS_LORE));
+        }
         inv.setItem(35, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_NPC_BACK)));
+        ensureCosmeticsWorking(player, actionNpcTarget != null ? null : titleId);
         player.openInventory(inv);
+    }
+
+    /** Seed cosmetics_working once from preset (or empty). Skip if already editing. */
+    private void ensureCosmeticsWorking(Player player, String presetId) {
+        if (player.hasMetadata("cosmetics_working")) return;
+        String enc = "";
+        if (presetId != null) {
+            NpcPreset preset = plugin.getNpcPresetManager().getPreset(presetId);
+            if (preset != null && preset.getCosmetics() != null && !preset.getCosmetics().isEmpty()) {
+                String e = preset.getCosmetics().encode();
+                if (e != null) enc = e;
+            }
+        }
+        player.setMetadata("cosmetics_working", new FixedMetadataValue(plugin, enc));
+    }
+
+    public void openNpcCosmeticsGUI(Player player) {
+        HmcCosmeticsHook hmc = plugin.getHmcCosmeticsHook();
+        if (hmc == null || !hmc.isEnabled()) return;
+        LangManager lang = plugin.getLangManager();
+        String titleId = metaString(player, "equip_preset_id");
+        ensureCosmeticsWorking(player, titleId);
+        if (titleId == null) titleId = "action";
+        NpcCosmetics cos = NpcCosmetics.parse(metaString(player, "cosmetics_working"));
+        int page = metaInt(player, "cosmetic_slots_page");
+        List<String> slots = hmc.slotIds();
+        Inventory inv = Bukkit.createInventory(null, 54, lang.format(LangKey.MENU_NPC_COSMETICS, "{id}", titleId));
+        ItemStack pane = createItem(Material.GRAY_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 54; i++) inv.setItem(i, pane);
+
+        int start = page * 45;
+        for (int i = 0; i < 45 && start + i < slots.size(); i++) {
+            String slotName = slots.get(start + i);
+            String id = cos.get(slotName);
+            ItemStack icon;
+            if (id != null) {
+                ItemStack cached = hmc.iconOf(id);
+                icon = cached != null ? cached : new ItemStack(Material.AMETHYST_SHARD);
+                ItemMeta meta = icon.getItemMeta();
+                if (meta != null) {
+                    meta.setDisplayName(lang.format(LangKey.MENU_NPC_COSMETIC_FILLED, "{slot}", slotName, "{id}", id));
+                    List<String> lore = new ArrayList<>(lang.getList(LangKey.MENU_NPC_COSMETIC_HINT));
+                    meta.setLore(lore);
+                    try {
+                        org.bukkit.enchantments.Enchantment glow =
+                                org.bukkit.enchantments.Enchantment.getByKey(NamespacedKey.minecraft("unbreaking"));
+                        if (glow != null) meta.addEnchant(glow, 1, true);
+                    } catch (Throwable ignored) {}
+                    meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+                    meta.getPersistentDataContainer().set(hmcSlotKey, PersistentDataType.STRING, slotName);
+                    icon.setItemMeta(meta);
+                }
+            } else {
+                icon = createItem(Material.LIGHT_GRAY_STAINED_GLASS_PANE, org.bukkit.ChatColor.WHITE + slotName,
+                        LangKey.MENU_NPC_COSMETIC_EMPTY, LangKey.MENU_NPC_COSMETIC_HINT);
+                ItemMeta meta = icon.getItemMeta();
+                if (meta != null) {
+                    meta.getPersistentDataContainer().set(hmcSlotKey, PersistentDataType.STRING, slotName);
+                    icon.setItemMeta(meta);
+                }
+            }
+            inv.setItem(i, icon);
+        }
+        if (page > 0) inv.setItem(45, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_PREV)));
+        inv.setItem(49, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_NPC_BACK)));
+        if (start + 45 < slots.size()) inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_NEXT)));
+        player.openInventory(inv);
+    }
+
+    public void openNpcCosmeticPicker(Player player, String slotName, int page) {
+        HmcCosmeticsHook hmc = plugin.getHmcCosmeticsHook();
+        if (hmc == null || !hmc.isEnabled() || slotName == null) return;
+        LangManager lang = plugin.getLangManager();
+        player.setMetadata("cosmetic_pick_slot", new FixedMetadataValue(plugin, slotName));
+        player.setMetadata("cosmetic_pick_page", new FixedMetadataValue(plugin, page));
+        List<String> ids = hmc.cosmeticIdsForSlot(slotName);
+        Inventory inv = Bukkit.createInventory(null, 54, lang.format(LangKey.MENU_NPC_COSMETIC_PICK, "{slot}", slotName));
+        ItemStack pane = createItem(Material.GRAY_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 54; i++) inv.setItem(i, pane);
+
+        int start = page * 45;
+        if (ids.isEmpty()) {
+            inv.setItem(22, createItem(Material.BARRIER, lang.get(LangKey.MENU_NPC_COSMETIC_NONE)));
+        } else {
+            for (int i = 0; i < 45 && start + i < ids.size(); i++) {
+                String id = ids.get(start + i);
+                ItemStack icon = hmc.iconOf(id);
+                if (icon == null) icon = new ItemStack(Material.AMETHYST_SHARD);
+                ItemMeta meta = icon.getItemMeta();
+                if (meta != null) {
+                    meta.setDisplayName(org.bukkit.ChatColor.WHITE + id);
+                    meta.getPersistentDataContainer().set(hmcIdKey, PersistentDataType.STRING, id);
+                    meta.getPersistentDataContainer().set(hmcSlotKey, PersistentDataType.STRING, slotName);
+                    icon.setItemMeta(meta);
+                }
+                inv.setItem(i, icon);
+            }
+        }
+        if (page > 0) inv.setItem(45, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_PREV)));
+        inv.setItem(48, createItem(Material.RED_CONCRETE, lang.get(LangKey.MENU_NPC_COSMETIC_CLEAR)));
+        inv.setItem(49, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_NPC_BACK)));
+        if (start + 45 < ids.size()) inv.setItem(53, createItem(Material.ARROW, lang.get(LangKey.MENU_LIST_NEXT)));
+        player.openInventory(inv);
+    }
+
+    private static String metaString(Player player, String key) {
+        if (!player.hasMetadata(key)) return null;
+        for (org.bukkit.metadata.MetadataValue v : player.getMetadata(key)) {
+            if (v.getOwningPlugin() != null) return v.asString();
+        }
+        return null;
+    }
+
+    private static int metaInt(Player player, String key) {
+        if (!player.hasMetadata(key)) return 0;
+        for (org.bukkit.metadata.MetadataValue v : player.getMetadata(key)) {
+            if (v.getOwningPlugin() != null) return v.asInt();
+        }
+        return 0;
     }
 
     private void fillEquipPane(Inventory inv) {
