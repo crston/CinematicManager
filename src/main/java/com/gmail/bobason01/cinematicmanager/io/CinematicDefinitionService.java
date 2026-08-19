@@ -4,6 +4,7 @@ import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.dialogue.DialoguePage;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -365,6 +366,14 @@ public final class CinematicDefinitionService {
                 value = requiredText(map, "animation", base, diagnostics);
                 extra = resolveActor(map, actors, base, diagnostics);
             }
+            case GESTURE -> {
+                value = requiredText(map, "gesture", base, diagnostics);
+                extra = resolveActor(map, actors, base, diagnostics);
+            }
+            case AM_PLAY -> {
+                value = requiredText(map, "clip", base, diagnostics);
+                extra = resolveActor(map, actors, base, diagnostics);
+            }
             case REMAP_MODEL -> {
                 value = encodeRemapModel(map, base, diagnostics);
                 extra = resolveActor(map, actors, base, diagnostics);
@@ -444,12 +453,16 @@ public final class CinematicDefinitionService {
                     Map<?, ?> map = maps.get(i);
                     try {
                         String typeRaw = text(map.get("type")).toUpperCase(Locale.ROOT);
-                        if ("GESTURE".equals(typeRaw)) {
-                            diagnostics.add(error("legacy.gesture.removed", base,
-                                    "GESTURE actions were removed; use ModelEngine animation/remap_model/change_part."));
-                            continue;
+                        CinematicAction.ActionType type = resolveActionType(typeRaw);
+                        if (type == null) {
+                            try {
+                                type = CinematicAction.ActionType.valueOf(typeRaw);
+                            } catch (Exception exception) {
+                                diagnostics.add(error("legacy.action.invalid", base,
+                                        "Unknown action type: " + typeRaw));
+                                continue;
+                            }
                         }
-                        CinematicAction.ActionType type = CinematicAction.ActionType.valueOf(typeRaw);
                         String value = nullableText(map.get("value"));
                         String extra = nullableText(map.get("extra"));
                         Location location = readLegacyLocation(map, base, diagnostics);
@@ -569,7 +582,7 @@ public final class CinematicDefinitionService {
                             "Environment clip '" + action.getValue() + "' does not exist."));
                 }
                 String target = switch (action.getType()) {
-                    case MOVE_NPC, ANIMATION, REMAP_MODEL, CHANGE_PART, EQUIP_NPC -> action.getExtra();
+                    case MOVE_NPC, ANIMATION, GESTURE, AM_PLAY, REMAP_MODEL, CHANGE_PART, EQUIP_NPC -> action.getExtra();
                     case HIDE_ENTITY -> action.getValue();
                     case SHOW_ENTITY -> action.getExtra() != null
                             ? action.getExtra() : action.getValue();
@@ -602,6 +615,8 @@ public final class CinematicDefinitionService {
             case HIDE_ENTITY -> allowed.add("actorId");
             case SHOW_ENTITY -> allowed.addAll(Set.of("actorId", "location"));
             case ANIMATION -> allowed.addAll(Set.of("actorId", "animation"));
+            case GESTURE -> allowed.addAll(Set.of("actorId", "gesture"));
+            case AM_PLAY -> allowed.addAll(Set.of("actorId", "clip"));
             case REMAP_MODEL -> allowed.addAll(Set.of("actorId", "model", "newModel", "map"));
             case CHANGE_PART -> allowed.addAll(Set.of("actorId", "model", "part", "newModel", "newPart"));
             case EQUIP_NPC -> allowed.addAll(Set.of("actorId", "equipment"));
@@ -682,6 +697,16 @@ public final class CinematicDefinitionService {
                         actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
                 out.put("animation", action.getValue());
             }
+            case GESTURE -> {
+                out.put("actorId",
+                        actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
+                out.put("gesture", action.getValue());
+            }
+            case AM_PLAY -> {
+                out.put("actorId",
+                        actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
+                out.put("clip", action.getValue());
+            }
             case REMAP_MODEL -> {
                 out.put("actorId",
                         actorIds.getOrDefault(action.getExtra(), safeActorId(action.getExtra())));
@@ -696,11 +721,20 @@ public final class CinematicDefinitionService {
             case DIALOGUE -> {
                 List<Map<String, Object>> pages = new ArrayList<>();
                 String separator = plugin.getConfig().getString("dialogue.page-separator", "||");
-                for (String page : text(action.getValue()).split(Pattern.quote(separator), -1)) {
-                    String[] parts = page.split(";", 2);
+                for (DialoguePage page : DialoguePage.parseWire(text(action.getValue()), separator)) {
                     Map<String, Object> pageMap = new LinkedHashMap<>();
-                    pageMap.put("speaker", parts.length > 1 ? parts[0] : "");
-                    pageMap.put("text", parts.length > 1 ? parts[1] : parts[0]);
+                    pageMap.put("speaker", page.speaker());
+                    pageMap.put("text", page.text());
+                    if (page.hasChoices()) {
+                        List<Map<String, Object>> choices = new ArrayList<>();
+                        for (DialoguePage.DialogueChoice c : page.choices()) {
+                            Map<String, Object> choiceMap = new LinkedHashMap<>();
+                            choiceMap.put("label", c.label());
+                            if (c.cinematicId() != null) choiceMap.put("cinematicId", c.cinematicId());
+                            choices.add(choiceMap);
+                        }
+                        pageMap.put("choices", choices);
+                    }
                     pages.add(pageMap);
                 }
                 out.put("displayMode", action.getExtra() == null ? "default" : action.getExtra());
@@ -723,7 +757,8 @@ public final class CinematicDefinitionService {
             case "REMAP", "REMAPMODEL", "REMAP_MODEL" -> CinematicAction.ActionType.REMAP_MODEL;
             case "CHANGEPART", "CHANGE_PART" -> CinematicAction.ActionType.CHANGE_PART;
             case "EQUIP", "EQUIPNPC", "EQUIP_NPC" -> CinematicAction.ActionType.EQUIP_NPC;
-            case "GESTURE" -> null; // removed
+            case "GESTURE" -> CinematicAction.ActionType.GESTURE;
+            case "AM_PLAY", "AMPLAY", "ANIMATION_MANAGER", "PACK_ANIM" -> CinematicAction.ActionType.AM_PLAY;
             default -> {
                 try {
                     yield CinematicAction.ActionType.valueOf(n);
@@ -739,6 +774,7 @@ public final class CinematicDefinitionService {
             case REMAP_MODEL -> "remap_model";
             case CHANGE_PART -> "change_part";
             case EQUIP_NPC -> "equip_npc";
+            case AM_PLAY -> "am_play";
             default -> type.name().toLowerCase(Locale.ROOT);
         };
     }
@@ -910,31 +946,62 @@ public final class CinematicDefinitionService {
             return null;
         }
         String separator = plugin.getConfig().getString("dialogue.page-separator", "||");
-        List<String> encoded = new ArrayList<>();
+        List<DialoguePage> encodedPages = new ArrayList<>();
         for (int i = 0; i < pages.size(); i++) {
             Map<?, ?> page = map(pages.get(i));
             if (page == null) {
                 required(diagnostics, path + "[" + i + "]", "Page must be an object.");
                 continue;
             }
-            validateObjectKeys(page, Set.of("speaker", "text"), path + "[" + i + "]",
+            validateObjectKeys(page, Set.of("speaker", "text", "choices"), path + "[" + i + "]",
                     diagnostics);
             String speaker = text(page.get("speaker"));
             String line = text(page.get("text"));
             if (line.isEmpty()) required(diagnostics, path + "[" + i + "].text", "Text is required.");
-            if (speaker.contains(";") || line.contains(separator)) {
+            if (speaker.contains(";") || line.contains(separator) || line.contains(">>>")) {
                 diagnostics.add(error("dialogue.separator.conflict", path + "[" + i + "]",
-                        "speaker cannot contain ';' and text cannot contain the page separator."));
+                        "speaker cannot contain ';' and text cannot contain '>>>' or the page separator."));
             }
-            encoded.add(speaker + ";" + line);
+            List<DialoguePage.DialogueChoice> choices = new ArrayList<>();
+            Object choicesRaw = page.get("choices");
+            if (choicesRaw instanceof List<?> choiceList) {
+                for (int c = 0; c < choiceList.size(); c++) {
+                    Map<?, ?> choiceMap = map(choiceList.get(c));
+                    if (choiceMap == null) {
+                        required(diagnostics, path + "[" + i + "].choices[" + c + "]",
+                                "Choice must be an object.");
+                        continue;
+                    }
+                    validateObjectKeys(choiceMap, Set.of("label", "cinematicId"),
+                            path + "[" + i + "].choices[" + c + "]", diagnostics);
+                    String label = text(choiceMap.get("label"));
+                    if (label.isEmpty()) {
+                        required(diagnostics, path + "[" + i + "].choices[" + c + "].label",
+                                "Choice label is required.");
+                    }
+                    String cineId = text(choiceMap.get("cinematicId"));
+                    if (label.contains("|") || label.contains("=>")
+                            || cineId.contains("|") || cineId.contains("=>")) {
+                        diagnostics.add(error("dialogue.choice.separator.conflict",
+                                path + "[" + i + "].choices[" + c + "]",
+                                "label/cinematicId cannot contain '|' or '=>'."));
+                    }
+                    choices.add(new DialoguePage.DialogueChoice(label, cineId.isEmpty() ? null : cineId));
+                }
+            } else if (choicesRaw != null) {
+                diagnostics.add(error("dialogue.choices.list.required",
+                        path + "[" + i + "].choices", "choices must be a list."));
+            }
+            encodedPages.add(new DialoguePage(speaker, line, choices));
         }
-        return String.join(separator, encoded);
+        return DialoguePage.encodeWire(encodedPages, separator);
     }
 
     private String displayMode(Object value, String base, List<Diagnostic> diagnostics) {
         String mode = normalized(value);
         if (mode.isEmpty() || "default".equals(mode)) return null;
         if ("betterhud".equals(mode)) return "title"; // legacy alias
+        if ("panel".equals(mode)) return "title"; // removed resource-pack panel → title
         if (!Set.of("title", "actionbar", "both", "bossbar").contains(mode)) {
             diagnostics.add(error("display_mode.invalid", base + ".displayMode",
                     "Use default, title, actionbar, both, or bossbar."));

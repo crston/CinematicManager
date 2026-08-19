@@ -184,6 +184,14 @@ public class CustomNPCManager {
         }
         boolean isMoving = (dx * dx + dy * dy + dz * dz) > 0.001;
 
+        var am = plugin.getAnimationManagerHook();
+        var lux = plugin.getLuxGesturesHook();
+        boolean animating = (am != null && am.isEnabled() && am.isPlaying(entity))
+                || (lux != null && lux.isEnabled() && lux.isPlaying(entity));
+        if (!animating && viewer != null && !viewer.canSee(entity)) {
+            revealToViewer(viewer, entity);
+        }
+
         entity.teleport(loc);
 
         var hmc = plugin.getHmcCosmeticsHook();
@@ -458,6 +466,37 @@ public class CustomNPCManager {
             // 아머스탠드의 기본 AI 회전 방지
             entity.setRotation(loc.getYaw(), loc.getPitch());
         });
+    }
+
+    /**
+     * After AM/Lux hideEntity the LibsDisguise body stays gone until re-sent to the viewer.
+     */
+    public void revealToViewer(Player viewer, Entity entity) {
+        if (viewer == null || !viewer.isOnline() || entity == null || !entity.isValid()) return;
+        if (entity instanceof LivingEntity living) {
+            living.removePotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY);
+            if (entity instanceof ArmorStand) {
+                living.setInvisible(true);
+            }
+        }
+        viewer.showEntity(plugin, entity);
+        org.bukkit.plugin.Plugin am = Bukkit.getPluginManager().getPlugin("AnimationManager");
+        if (am != null && am.isEnabled()) {
+            viewer.showEntity(am, entity);
+        }
+        org.bukkit.plugin.Plugin lux = Bukkit.getPluginManager().getPlugin("LuxGestures");
+        if (lux != null && lux.isEnabled()) {
+            viewer.showEntity(lux, entity);
+        }
+        if (!DisguiseAPI.isDisguised(entity)) return;
+        try {
+            Disguise disguise = DisguiseAPI.getDisguise(entity);
+            if (disguise == null) return;
+            disguise.getWatcher().setInvisible(false);
+            DisguiseAPI.disguiseToPlayers(entity, disguise, viewer);
+            viewer.showEntity(plugin, entity);
+        } catch (Throwable ignored) {
+        }
     }
 
     private void hideFromOthers(Player viewer, Entity entity) {

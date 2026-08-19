@@ -205,6 +205,17 @@ menu:
   animation_changepart_lore:
     - "&7Replace one bone part."
     - "&7Format: part>newModel:newPart"
+  animation_gesture: "&dLuxGestures"
+  animation_gesture_lore:
+    - "&7Play a LuxGestures emote on the NPC."
+    - "&7Enter the gesture id in chat."
+    - "&7Stop with: STOP"
+  animation_am: "&bAnimationManager"
+  animation_am_lore:
+    - "&7Play an AnimationManager clip on the NPC."
+    - "&7Format: model.anim  (e.g. player.wave)"
+    - "&7Viewer-only packets — others cannot see it."
+    - "&7Stop with: STOP"
   animation_stop: "&4Stop Animation"
   animation_stop_lore:
     - "&7Stop a playing animation."
@@ -290,6 +301,8 @@ msg:
   input_wait: "&eEnter wait text (use - for empty)."
   input_command: "&eEnter a command (# = console)."
   input_animation: "&eEnter a ModelEngine animation (state) name."
+  input_gesture: "&eEnter a LuxGestures gesture id (stop: STOP)."
+  input_am: "&eEnter an AnimationManager clip (e.g. player.wave, stop: STOP)."
   input_remap: "&eRemap · newModel or model>newModel or model>newModel|map"
   input_changepart: "&eChangePart · part>newModel:newPart or model:part>newModel:newPart"
   input_anim_stop: "&eEnter the animation name to stop."

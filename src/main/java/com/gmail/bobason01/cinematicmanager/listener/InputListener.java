@@ -11,6 +11,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
@@ -111,6 +112,24 @@ public class InputListener implements Listener {
         if (session.isWaitingForInput()) {
             tryAdvance(player, session);
         }
+    }
+
+    @EventHandler
+    public void onItemHeld(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        CinematicSession session = plugin.getSessionManager().getSession(player);
+        if (session == null || !session.isActive() || !session.hasDialogueChoices()) {
+            return;
+        }
+        event.setCancelled(true);
+        int prev = event.getPreviousSlot();
+        int next = event.getNewSlot();
+        int delta = next - prev;
+        if (delta == 0) return;
+        // Wrap around hotbar (8→0 = +1, 0→8 = -1)
+        if (delta > 4) delta -= 9;
+        else if (delta < -4) delta += 9;
+        session.scrollDialogueChoice(delta > 0 ? 1 : -1);
     }
 
     @EventHandler

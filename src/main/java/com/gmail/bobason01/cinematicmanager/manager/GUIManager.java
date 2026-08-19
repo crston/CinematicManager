@@ -233,7 +233,9 @@ public class GUIManager {
         inv.setItem(20, createItem(Material.COMMAND_BLOCK, lang.get(LangKey.MENU_ANIMATION_CUSTOM), LangKey.MENU_ANIMATION_CUSTOM_LORE));
         inv.setItem(21, createItem(Material.ANVIL, lang.get(LangKey.MENU_ANIMATION_REMAP), LangKey.MENU_ANIMATION_REMAP_LORE));
         inv.setItem(22, createItem(Material.ARMOR_STAND, lang.get(LangKey.MENU_ANIMATION_CHANGEPART), LangKey.MENU_ANIMATION_CHANGEPART_LORE));
-        inv.setItem(24, createItem(Material.BARRIER, lang.get(LangKey.MENU_ANIMATION_STOP), LangKey.MENU_ANIMATION_STOP_LORE));
+        inv.setItem(23, createItem(Material.TOTEM_OF_UNDYING, lang.get(LangKey.MENU_ANIMATION_GESTURE), LangKey.MENU_ANIMATION_GESTURE_LORE));
+        inv.setItem(24, createItem(Material.NETHER_STAR, lang.get(LangKey.MENU_ANIMATION_AM), LangKey.MENU_ANIMATION_AM_LORE));
+        inv.setItem(25, createItem(Material.BARRIER, lang.get(LangKey.MENU_ANIMATION_STOP), LangKey.MENU_ANIMATION_STOP_LORE));
         inv.setItem(31, createItem(Material.DARK_OAK_DOOR, lang.get(LangKey.MENU_ACTION_BACK)));
         player.openInventory(inv);
     }

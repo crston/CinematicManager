@@ -205,6 +205,17 @@ menu:
   animation_changepart_lore:
     - "&7특정 본의 파츠만 교체합니다."
     - "&7형식: part>newModel:newPart"
+  animation_gesture: "&dLuxGestures"
+  animation_gesture_lore:
+    - "&7LuxGestures 제스처를 NPC에 재생합니다."
+    - "&7제스처 ID를 채팅으로 입력하세요."
+    - "&7중지: STOP"
+  animation_am: "&bAnimationManager"
+  animation_am_lore:
+    - "&7AnimationManager 클립을 NPC에 재생합니다."
+    - "&7형식: model.anim  (예: player.wave)"
+    - "&7시청자에게만 패킷으로 보입니다."
+    - "&7중지: STOP"
   animation_stop: "&4동작 중지"
   animation_stop_lore:
     - "&7재생 중인 애니메이션을 멈춥니다."
@@ -290,6 +301,8 @@ msg:
   input_wait: "&e대기 문구를 입력하세요. (비우기: -)"
   input_command: "&e명령어를 입력하세요. (# = 콘솔)"
   input_animation: "&eModelEngine 애니메이션(state) 이름을 입력하세요."
+  input_gesture: "&eLuxGestures 제스처 ID를 입력하세요. (중지: STOP)"
+  input_am: "&eAnimationManager 클립을 입력하세요. (예: player.wave, 중지: STOP)"
   input_remap: "&eRemap · newModel 또는 model>newModel 또는 model>newModel|map"
   input_changepart: "&eChangePart · part>newModel:newPart 또는 model:part>newModel:newPart"
   input_anim_stop: "&e중지할 애니메이션 이름을 입력하세요."

@@ -6,6 +6,8 @@ import com.gmail.bobason01.cinematicmanager.data.CinematicAction;
 import com.gmail.bobason01.cinematicmanager.data.NpcCosmetics;
 import com.gmail.bobason01.cinematicmanager.data.NpcEquipment;
 import com.gmail.bobason01.cinematicmanager.data.CinematicData;
+import com.gmail.bobason01.cinematicmanager.dialogue.DialoguePage;
+import com.gmail.bobason01.cinematicmanager.dialogue.DialoguePage.DialogueChoice;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentClip;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPlayer;
 import com.gmail.bobason01.cinematicmanager.manager.LangKey;
@@ -61,9 +63,11 @@ public class CinematicSession {
     private final Location cameraScratch = new Location(null, 0, 0, 0);
     private int cameraStep = 0;
 
-    private List<String> dialoguePages = Collections.emptyList();
+    private List<DialoguePage> dialoguePages = Collections.emptyList();
     private int dialoguePageIndex = 0;
     private String dialogueDisplayMode = "title";
+    private int dialogueChoiceIndex = 0;
+    private DialoguePage dialogueCurrentPage = null;
 
     /** 시청자 시야 방향 앞 1블록에만 보이는 개인 페이크 블록 */
     private Location clickProxyBlock = null;
@@ -197,6 +201,10 @@ public class CinematicSession {
 
         updateNpcMovements();
         updateEnvironmentPlayers();
+        var am = plugin.getAnimationManagerHook();
+        if (am != null && am.isEnabled()) {
+            am.tick(player);
+        }
         if (!active) return;
 
         // 이번 틱에서 대화에 들어갔으면 틱만 소모하고 멈춤 (재트리거 방지)
@@ -206,7 +214,8 @@ public class CinematicSession {
         }
 
         if (currentTick > maxTick && movingNpcs.isEmpty() && cameraRelative == null
-                && !cameraUpdated && environmentPlayers.isEmpty()) {
+                && !cameraUpdated && environmentPlayers.isEmpty()
+                && (am == null || !am.isEnabled() || !am.isPlayingFor(player))) {
             stop();
             return;
         }
@@ -240,6 +249,7 @@ public class CinematicSession {
     /**
      * 우클릭으로 대화/대기 페이지를 넘긴다.
      * 타이핑 중이면 먼저 전체 문장을 완성한다.
+     * 선택지에 cinematicId 가 있으면 해당 시네마틱으로 연결.
      */
     public boolean advanceDialogue() {
         if (!waitingForInput) return false;
@@ -253,6 +263,22 @@ public class CinematicSession {
             return true;
         }
 
+        if (dialogueCurrentPage != null && dialogueCurrentPage.hasChoices()) {
+            DialogueChoice choice = dialogueCurrentPage.choices()
+                    .get(Math.floorMod(dialogueChoiceIndex, dialogueCurrentPage.choices().size()));
+            if (choice.cinematicId() != null) {
+                String nextId = choice.cinematicId();
+                deferredActions.clear();
+                clearDialogueState();
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (player.isOnline()) {
+                        plugin.getSessionManager().startSession(player, nextId);
+                    }
+                });
+                return true;
+            }
+        }
+
         dialoguePageIndex++;
         if (dialoguePageIndex >= dialoguePages.size()) {
             clearDialogueState();
@@ -262,6 +288,25 @@ public class CinematicSession {
 
         showDialoguePage();
         return true;
+    }
+
+    /** Scroll while dialogue choices are visible. */
+    public boolean scrollDialogueChoice(int delta) {
+        if (!waitingForInput) return false;
+        if (dialogueCurrentPage == null || !dialogueCurrentPage.hasChoices()) return false;
+        if (dialogueTyping) return false;
+        int size = dialogueCurrentPage.choices().size();
+        if (size <= 0 || delta == 0) return false;
+        dialogueChoiceIndex = Math.floorMod(dialogueChoiceIndex + delta, size);
+        renderDialogueFrame();
+        return true;
+    }
+
+    public boolean hasDialogueChoices() {
+        return waitingForInput
+                && dialogueCurrentPage != null
+                && dialogueCurrentPage.hasChoices()
+                && !dialogueTyping;
     }
 
     /**
@@ -297,6 +342,8 @@ public class CinematicSession {
             case SHOW_ENTITY -> handleShow(action);
             case LIGHTNING -> handleLightning(action);
             case ANIMATION -> handleAnimation(action);
+            case GESTURE -> handleGesture(action);
+            case AM_PLAY -> handleAmPlay(action);
             case REMAP_MODEL -> handleRemapModel(action);
             case CHANGE_PART -> handleChangePart(action);
             case EQUIP_NPC -> handleEquip(action);
@@ -371,6 +418,8 @@ public class CinematicSession {
     private void handleEquip(CinematicAction action) {
         Entity e = findEntity(action.getExtra());
         if (e == null) return;
+        ensureGestureStopped(e);
+        ensureAmStopped(e);
         applyEquipment(e, action.getValue());
     }
 
@@ -406,10 +455,10 @@ public class CinematicSession {
         List<Location> relativePath = data.getPathRecord(action.getValue());
         if (relativePath == null || relativePath.isEmpty()) return;
 
-        Location origin = spawnLocations.get(targetKey);
+        Location origin = action.getLocation();
         if (origin == null) {
-            // 녹화 시 기준점(MOVE 액션 location)으로 폴백
-            origin = action.getLocation();
+            // Legacy moves without stored origin → spawn pose
+            origin = spawnLocations.get(targetKey);
         }
         if (origin == null) return;
 
@@ -419,6 +468,11 @@ public class CinematicSession {
             entity = findEntity(action.getExtra());
         }
         if (entity != null) {
+            // Gesture hides the cinematic NPC and leaves a temp host — restore before pathing.
+            var lux = plugin.getLuxGesturesHook();
+            if (lux != null && lux.isEnabled()) {
+                lux.ensureStopped(entity, player);
+            }
             String foundKey = null;
             for (Map.Entry<String, Entity> e : activeEntities.entrySet()) {
                 if (e.getValue().equals(entity)) {
@@ -502,6 +556,18 @@ public class CinematicSession {
                 path.entity = entity;
             }
             if (entity == null || !entity.isValid() || path.step >= path.relativeLocations.length) {
+                if (entity != null && entity.isValid() && path.relativeLocations.length > 0) {
+                    // Remember end pose so later systems (and chained logic) see the last stand point.
+                    Location lastRel = path.relativeLocations[path.relativeLocations.length - 1];
+                    Location end = path.scratch;
+                    end.setWorld(path.baseOrigin.getWorld());
+                    end.setX(path.baseOrigin.getX() + lastRel.getX());
+                    end.setY(path.baseOrigin.getY() + lastRel.getY());
+                    end.setZ(path.baseOrigin.getZ() + lastRel.getZ());
+                    end.setYaw(lastRel.getYaw());
+                    end.setPitch(lastRel.getPitch());
+                    spawnLocations.put(entry.getKey(), end.clone());
+                }
                 it.remove();
                 continue;
             }
@@ -521,21 +587,70 @@ public class CinematicSession {
     private void handleAnimation(CinematicAction action) {
         Entity e = findEntity(action.getExtra());
         if (e != null) {
+            ensureGestureStopped(e);
+            ensureAmStopped(e);
             String val = resolvePlaceholders(action.getValue());
             plugin.getNpcManager().playAnimation(player, e, val);
         }
     }
 
+    private void handleGesture(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e == null) return;
+        ensureAmStopped(e);
+        var hook = plugin.getLuxGesturesHook();
+        if (hook == null || !hook.isEnabled()) {
+            plugin.getLogger().warning("GESTURE skipped: LuxGestures is not available.");
+            return;
+        }
+        String val = resolvePlaceholders(action.getValue());
+        String skin = com.gmail.bobason01.cinematicmanager.hook.LuxGesturesHook.skinFromSpawnKey(action.getExtra());
+        hook.play(player, e, val, skin);
+    }
+
+    private void handleAmPlay(CinematicAction action) {
+        Entity e = findEntity(action.getExtra());
+        if (e == null) {
+            plugin.getLogger().warning("AM_PLAY skipped: NPC not found (" + action.getExtra() + ")");
+            return;
+        }
+        ensureGestureStopped(e);
+        var hook = plugin.getAnimationManagerHook();
+        if (hook == null || !hook.isEnabled()) {
+            plugin.getLogger().warning("AM_PLAY skipped: AnimationManager is not available.");
+            return;
+        }
+        hook.play(player, e, resolvePlaceholders(action.getValue()));
+    }
+
     private void handleRemapModel(CinematicAction action) {
         Entity e = findEntity(action.getExtra());
         if (e == null) return;
+        ensureGestureStopped(e);
+        ensureAmStopped(e);
         plugin.getNpcManager().applyRemapModel(e, resolvePlaceholders(action.getValue()));
     }
 
     private void handleChangePart(CinematicAction action) {
         Entity e = findEntity(action.getExtra());
         if (e == null) return;
+        ensureGestureStopped(e);
+        ensureAmStopped(e);
         plugin.getNpcManager().applyChangePart(e, resolvePlaceholders(action.getValue()));
+    }
+
+    private void ensureGestureStopped(Entity entity) {
+        var lux = plugin.getLuxGesturesHook();
+        if (lux != null && lux.isEnabled()) {
+            lux.ensureStopped(entity, player);
+        }
+    }
+
+    private void ensureAmStopped(Entity entity) {
+        var am = plugin.getAnimationManagerHook();
+        if (am != null && am.isEnabled()) {
+            am.ensureStopped(entity, player);
+        }
     }
 
     private void handleCommand(CinematicAction action) {
@@ -564,18 +679,11 @@ public class CinematicSession {
 
     private void handleDialogue(CinematicAction action) {
         String raw = resolvePlaceholders(action.getValue());
-
         String separator = plugin.getConfig().getString("dialogue.page-separator", "||");
-        String[] pages = raw.split(java.util.regex.Pattern.quote(separator), -1);
-        List<String> parsed = new ArrayList<>();
-        for (String page : pages) {
-            if (!page.isBlank()) parsed.add(page.trim());
-        }
-        if (parsed.isEmpty()) parsed.add(" ");
-
         dialogueDisplayMode = resolveDisplayMode(action.getExtra());
-        dialoguePages = parsed;
+        dialoguePages = DialoguePage.parseWire(raw, separator);
         dialoguePageIndex = 0;
+        dialogueChoiceIndex = 0;
         waitingForInput = true;
         updateClickProxy();
         showDialoguePage();
@@ -584,8 +692,9 @@ public class CinematicSession {
     private void handleWait(CinematicAction action) {
         String raw = resolvePlaceholders(action.getValue());
         dialogueDisplayMode = resolveDisplayMode(action.getExtra());
-        dialoguePages = List.of(raw.isBlank() ? " " : raw.trim());
+        dialoguePages = List.of(new DialoguePage("", raw.isBlank() ? " " : raw.trim(), List.of()));
         dialoguePageIndex = 0;
+        dialogueChoiceIndex = 0;
         waitingForInput = true;
         updateClickProxy();
         showDialoguePage();
@@ -605,26 +714,20 @@ public class CinematicSession {
         }
         String configured = plugin.getConfig().getString("dialogue.display-mode", "title")
                 .toLowerCase(Locale.ROOT);
-        if (configured.equals("betterhud") || configured.equals("default")) {
+        if (configured.equals("betterhud") || configured.equals("default") || configured.equals("panel")) {
             return "title";
         }
         return configured;
     }
 
     private void showDialoguePage() {
-        String page = normalizeLineBreaks(dialoguePages.get(dialoguePageIndex));
-        String[] split = page.split(";", 2);
-        dialogueSpeaker = color(split[0]);
-        dialogueFullLine = split.length > 1 ? color(split[1]) : "";
-        // 화자;대사 형식이 아니면 전체를 대사로
-        if (dialogueFullLine.isEmpty() && split.length == 1) {
-            dialogueSpeaker = "";
-            dialogueFullLine = color(split[0]);
-        }
-        dialogueSpeaker = normalizeLineBreaks(dialogueSpeaker);
-        dialogueFullLine = normalizeLineBreaks(dialogueFullLine);
+        DialoguePage page = dialoguePages.get(dialoguePageIndex);
+        dialogueCurrentPage = page;
+        dialogueChoiceIndex = 0;
 
-        dialogueHint = ""; // 우클릭 힌트 미표시
+        dialogueSpeaker = color(normalizeLineBreaks(page.speaker()));
+        dialogueFullLine = color(normalizeLineBreaks(page.text()));
+        dialogueHint = "";
 
         dialogueSpeakerPlain = stripLegacy(dialogueSpeaker);
         dialogueFullPlain = stripLegacy(dialogueFullLine);
@@ -677,16 +780,32 @@ public class CinematicSession {
 
     private void renderDialogueFrame() {
         String visibleLine = visibleTypedText(dialogueFullLine, dialogueTypedChars);
+        String choiceSuffix = "";
+        if (dialogueCurrentPage != null && dialogueCurrentPage.hasChoices() && !dialogueTyping
+                && dialogueTypedChars >= dialoguePlainLength) {
+            StringBuilder sb = new StringBuilder(" §8| ");
+            List<DialogueChoice> choices = dialogueCurrentPage.choices();
+            int sel = Math.floorMod(dialogueChoiceIndex, choices.size());
+            for (int i = 0; i < choices.size(); i++) {
+                if (i > 0) sb.append(' ');
+                boolean on = i == sel;
+                sb.append(on ? "§e›" : "§7");
+                sb.append(i + 1).append('.').append(choices.get(i).label()).append("§r");
+            }
+            choiceSuffix = sb.toString();
+        }
 
         if (dialogueDisplayMode.equals("title")) {
             player.sendTitle(dialogueSpeaker, visibleLine, 0, 40, 0);
+            if (!choiceSuffix.isEmpty()) sendActionBar(choiceSuffix.trim());
+            else sendActionBar("");
             clearDialogueBossBar();
             return;
         }
         if (dialogueDisplayMode.equals("actionbar")) {
             String actionBar = dialogueSpeaker.isEmpty()
                     ? visibleLine : dialogueSpeaker + " §7» §f" + visibleLine;
-            sendActionBar(actionBar);
+            sendActionBar(actionBar + choiceSuffix);
             clearDialogueBossBar();
             return;
         }
@@ -694,7 +813,7 @@ public class CinematicSession {
             player.sendTitle(dialogueSpeaker, visibleLine, 0, 40, 0);
             String actionBar = dialogueSpeaker.isEmpty()
                     ? visibleLine : dialogueSpeaker + " §7» §f" + visibleLine;
-            sendActionBar(actionBar);
+            sendActionBar(actionBar + choiceSuffix);
             clearDialogueBossBar();
             return;
         }
@@ -710,6 +829,7 @@ public class CinematicSession {
         } else {
             body = "§f ";
         }
+        if (!choiceSuffix.isEmpty()) body = body + choiceSuffix;
         ensureDialogueBossBar();
         dialogueBossBar.setTitle(body);
         dialogueBossBar.setProgress(1.0);
@@ -786,6 +906,8 @@ public class CinematicSession {
         waitingForInput = false;
         dialoguePages = Collections.emptyList();
         dialoguePageIndex = 0;
+        dialogueChoiceIndex = 0;
+        dialogueCurrentPage = null;
         dialogueTyping = false;
         dialogueTypedChars = 0;
         dialogueSpeaker = "";
@@ -896,11 +1018,15 @@ public class CinematicSession {
 
     private void handleHide(CinematicAction action) {
         Entity e = findEntity(action.getValue());
-        if (e != null) e.teleport(e.getLocation().add(0, -100, 0));
+        if (e != null) {
+            ensureGestureStopped(e);
+            e.teleport(e.getLocation().add(0, -100, 0));
+        }
     }
 
     private void handleShow(CinematicAction action) {
         Entity e = findEntity(action.getExtra() != null ? action.getExtra() : action.getValue());
+        if (e != null) ensureGestureStopped(e);
         if (e != null) e.teleport(action.getLocation());
     }
 
@@ -933,10 +1059,25 @@ public class CinematicSession {
         waitingForInput = false;
         dialoguePages = Collections.emptyList();
         dialoguePageIndex = 0;
+        dialogueChoiceIndex = 0;
+        dialogueCurrentPage = null;
         dialogueTyping = false;
         deferredActions.clear();
         clearDialogueBossBar();
         clearClickProxy();
+        var lux = plugin.getLuxGesturesHook();
+        if (lux != null && lux.isEnabled()) {
+            for (Entity e : activeEntities.values()) {
+                lux.stop(e, player);
+            }
+        }
+        var am = plugin.getAnimationManagerHook();
+        if (am != null && am.isEnabled()) {
+            for (Entity e : activeEntities.values()) {
+                am.stop(e, player);
+            }
+            am.stopAll(player);
+        }
         activeEntities.values().forEach(e -> plugin.getNpcManager().remove(e));
         activeEntities.clear(); movingNpcs.clear(); spawnLocations.clear();
         for (EnvironmentPlayer env : environmentPlayers) env.cleanup();

@@ -317,7 +317,9 @@ public class GUIListener implements Listener {
             case 20 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STATE");
             case 21 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "REMAP");
             case 22 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "CHANGEPART");
-            case 24 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STOP");
+            case 23 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "GESTURE");
+            case 24 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "AM_PLAY");
+            case 25 -> plugin.getGuiManager().openNPCListGUI(player, id, t, p, "STOP");
             case 31 -> plugin.getGuiManager().openActionSelectGUI(player, id, t, p);
         }
     }
@@ -357,7 +359,8 @@ public class GUIListener implements Listener {
             player.removeMetadata("equip_preset_id", plugin);
             plugin.getGuiManager().openNpcEquipGUI(player, null, target, id, t);
         } else if (mode.equals("STATE") || mode.equals("STOP")
-                || mode.equals("REMAP") || mode.equals("CHANGEPART")) {
+                || mode.equals("REMAP") || mode.equals("CHANGEPART")
+                || mode.equals("GESTURE") || mode.equals("AM_PLAY")) {
             player.closeInventory();
             player.setMetadata("edit_npc_target", new FixedMetadataValue(plugin, target));
             plugin.getChatInputListener().startTrackInput(player, id, mode, t);

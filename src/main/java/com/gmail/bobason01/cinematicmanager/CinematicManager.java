@@ -3,8 +3,10 @@ package com.gmail.bobason01.cinematicmanager;
 import com.gmail.bobason01.cinematicmanager.command.CinematicCommand;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentPacketListener;
 import com.gmail.bobason01.cinematicmanager.fx.EnvironmentRecordManager;
+import com.gmail.bobason01.cinematicmanager.hook.AnimationManagerHook;
 import com.gmail.bobason01.cinematicmanager.hook.HookManager;
 import com.gmail.bobason01.cinematicmanager.hook.HmcCosmeticsHook;
+import com.gmail.bobason01.cinematicmanager.hook.LuxGesturesHook;
 import com.gmail.bobason01.cinematicmanager.listener.*;
 import com.gmail.bobason01.cinematicmanager.manager.*;
 import com.github.retrooper.packetevents.PacketEvents;
@@ -23,6 +25,8 @@ public class CinematicManager extends JavaPlugin {
     private EnvironmentRecordManager environmentRecordManager;
     private HookManager hookManager;
     private HmcCosmeticsHook hmcCosmeticsHook;
+    private LuxGesturesHook luxGesturesHook;
+    private AnimationManagerHook animationManagerHook;
     private GUIManager guiManager;
     private LangManager langManager;
     private ChatInputListener chatInputListener;
@@ -40,6 +44,8 @@ public class CinematicManager extends JavaPlugin {
         this.configManager = new ConfigManager(this);
         this.hookManager = new HookManager(this);
         this.hmcCosmeticsHook = new HmcCosmeticsHook(this);
+        this.luxGesturesHook = new LuxGesturesHook(this);
+        this.animationManagerHook = new AnimationManagerHook(this);
         this.npcManager = new CustomNPCManager(this);
         this.npcPresetManager = new NpcPresetManager(this);
         this.environmentRecordManager = new EnvironmentRecordManager(this);
@@ -113,6 +119,12 @@ public class CinematicManager extends JavaPlugin {
         if (hmcCosmeticsHook != null) {
             hmcCosmeticsHook.shutdown();
         }
+        if (luxGesturesHook != null) {
+            luxGesturesHook.shutdown();
+        }
+        if (animationManagerHook != null) {
+            animationManagerHook.shutdown();
+        }
         if (environmentRecordManager != null) {
             environmentRecordManager.shutdown();
         }
@@ -160,6 +172,14 @@ public class CinematicManager extends JavaPlugin {
 
     public HmcCosmeticsHook getHmcCosmeticsHook() {
         return hmcCosmeticsHook;
+    }
+
+    public LuxGesturesHook getLuxGesturesHook() {
+        return luxGesturesHook;
+    }
+
+    public AnimationManagerHook getAnimationManagerHook() {
+        return animationManagerHook;
     }
 
     public GUIManager getGuiManager() {

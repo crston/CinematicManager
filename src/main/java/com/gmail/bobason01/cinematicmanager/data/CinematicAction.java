@@ -19,6 +19,8 @@ public class CinematicAction implements Serializable {
         HIDE_ENTITY,
         SHOW_ENTITY,
         ANIMATION,
+        GESTURE,
+        AM_PLAY,
         REMAP_MODEL,
         CHANGE_PART,
         EQUIP_NPC,
@@ -72,7 +74,7 @@ public class CinematicAction implements Serializable {
 
     public TrackType getTrackType() {
         return switch (this.type) {
-            case SPAWN_NPC, MOVE_NPC, ANIMATION, REMAP_MODEL, CHANGE_PART, EQUIP_NPC,
+            case SPAWN_NPC, MOVE_NPC, ANIMATION, GESTURE, AM_PLAY, REMAP_MODEL, CHANGE_PART, EQUIP_NPC,
                  HIDE_ENTITY, SHOW_ENTITY -> TrackType.ACTION;
             case CAMERA -> TrackType.CAMERA;
             case SOUND, PARTICLE, TITLE, MESSAGE, COMMAND, LIGHTNING, DIALOGUE, WAIT, ENV_CLIP -> TrackType.EFFECT;

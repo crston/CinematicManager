@@ -123,6 +123,8 @@ public class CinematicData implements Serializable {
         return type == CinematicAction.ActionType.SPAWN_NPC ||
                 type == CinematicAction.ActionType.MOVE_NPC ||
                 type == CinematicAction.ActionType.ANIMATION ||
+                type == CinematicAction.ActionType.GESTURE ||
+                type == CinematicAction.ActionType.AM_PLAY ||
                 type == CinematicAction.ActionType.REMAP_MODEL ||
                 type == CinematicAction.ActionType.CHANGE_PART ||
                 type == CinematicAction.ActionType.EQUIP_NPC ||

@@ -23,12 +23,10 @@ actions:
 
   - tick: 10
     type: dialogue
-    displayMode: default
+    displayMode: title
     pages:
       - speaker: Guide
-        text: Welcome to this cinematic.
-      - speaker: Guide
-        text: Follow me.
+        text: Which path will you take?
 
   - tick: 20
     type: move_npc
@@ -40,6 +38,16 @@ actions:
     type: animation
     actorId: guide
     animation: SWING
+
+  - tick: 42
+    type: gesture
+    actorId: guide
+    gesture: Wave
+
+  - tick: 44
+    type: am_play
+    actorId: guide
+    clip: player.wave
 
   - tick: 45
     type: sound

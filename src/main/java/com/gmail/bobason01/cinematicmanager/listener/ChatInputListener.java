@@ -78,6 +78,8 @@ public class ChatInputListener implements Listener {
             case "NPC_CREATE_MM" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_MM));
             case "NPC_CREATE_ME" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_NPC_CREATE_ME));
             case "STATE", "STOP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_ANIMATION));
+            case "GESTURE" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_GESTURE));
+            case "AM_PLAY" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_AM));
             case "REMAP" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_REMAP));
             case "CHANGEPART" -> player.sendMessage(lang.getPrefixed(LangKey.MSG_INPUT_CHANGEPART));
             case "SPAWN" -> {
@@ -160,6 +162,8 @@ public class ChatInputListener implements Listener {
                 case "WAIT" -> CinematicAction.ActionType.WAIT;
                 case "COMMAND" -> CinematicAction.ActionType.COMMAND;
                 case "STATE", "STOP" -> CinematicAction.ActionType.ANIMATION;
+                case "GESTURE" -> CinematicAction.ActionType.GESTURE;
+                case "AM_PLAY" -> CinematicAction.ActionType.AM_PLAY;
                 case "REMAP" -> CinematicAction.ActionType.REMAP_MODEL;
                 case "CHANGEPART" -> CinematicAction.ActionType.CHANGE_PART;
                 default -> null;
@@ -169,7 +173,8 @@ public class ChatInputListener implements Listener {
                 String val = context.prefix + message;
                 String extra = null;
                 if (context.type.equals("STATE") || context.type.equals("STOP")
-                        || context.type.equals("REMAP") || context.type.equals("CHANGEPART")) {
+                        || context.type.equals("REMAP") || context.type.equals("CHANGEPART")
+                        || context.type.equals("GESTURE") || context.type.equals("AM_PLAY")) {
                     extra = getMetadata(player, "edit_npc_target");
                     if (context.type.equals("STOP")) val = "STOP:" + message;
                 }

@@ -8,14 +8,17 @@ C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\data\NpcCosmetics.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\data\NpcEquipment.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\data\NpcPreset.java
+C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\dialogue\DialoguePage.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\ArmorStandSkillCodec.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\EnvironmentClip.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\EnvironmentPacketListener.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\EnvironmentPlayer.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\EnvironmentRecorder.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\fx\EnvironmentRecordManager.java
+C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\hook\AnimationManagerHook.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\hook\HmcCosmeticsHook.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\hook\HookManager.java
+C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\hook\LuxGesturesHook.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\io\CinematicDefinitionService.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\listener\ChatInputListener.java
 C:\Users\bobas\OneDrive\바탕 화면\개발\CinematicManager\src\main\java\com\gmail\bobason01\cinematicmanager\listener\CinematicControlListener.java

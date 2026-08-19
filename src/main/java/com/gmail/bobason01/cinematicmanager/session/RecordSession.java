@@ -11,7 +11,9 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class RecordSession {
@@ -41,20 +43,11 @@ public class RecordSession {
 
         CinematicData data = plugin.getDataManager().getCinematic(cinematicId);
         Location origin = null;
-        int originTick = Integer.MIN_VALUE;
-        if (data != null && targetSlot != null) {
-            String targetKey = sanitize(targetSlot);
-            for (var entry : data.getTimeline().entrySet()) {
-                int tick = entry.getKey();
-                if (tick > startTick || tick < originTick) continue;
-                for (CinematicAction action : entry.getValue()) {
-                    if (action.getType() == CinematicAction.ActionType.SPAWN_NPC
-                            && sanitize(action.getValue()).equals(targetKey)) {
-                        origin = action.getLocation();
-                        originTick = tick;
-                    }
-                }
-            }
+        if (data != null && recordType == CinematicAction.ActionType.MOVE_NPC && targetSlot != null) {
+            // Spawn → prior MOVE/SHOW chain so the next path continues from the NPC's last pose.
+            origin = resolveNpcPoseAt(data, targetSlot, startTick);
+        } else if (data != null && targetSlot != null) {
+            origin = findLatestSpawn(data, targetSlot, startTick);
         }
 
         this.recordOrigin = (origin != null) ? origin.clone() : player.getLocation().clone();
@@ -66,7 +59,9 @@ public class RecordSession {
         isRecording = true;
 
         player.sendMessage(plugin.getLangManager().getPrefixed(LangKey.MSG_RECORD_START));
-        player.teleport(recordOrigin);
+        if (recordOrigin.getWorld() != null) {
+            player.teleport(recordOrigin);
+        }
 
         new BukkitRunnable() {
             @Override
@@ -136,6 +131,75 @@ public class RecordSession {
                 plugin.getGuiManager().openStudioGUI(player, cinematicId, startTick / 180);
             }
         }.runTask(plugin);
+    }
+
+    /**
+     * World pose of {@code targetSlot} just before {@code startTick}: spawn, then each prior
+     * MOVE/SHOW for that NPC applied in tick order.
+     */
+    private Location resolveNpcPoseAt(CinematicData data, String targetSlot, int startTick) {
+        String targetKey = sanitize(targetSlot);
+        Location pose = null;
+
+        List<Map.Entry<Integer, List<CinematicAction>>> ticks = new ArrayList<>(data.getTimeline().entrySet());
+        ticks.sort(Comparator.comparingInt(Map.Entry::getKey));
+
+        for (Map.Entry<Integer, List<CinematicAction>> entry : ticks) {
+            int tick = entry.getKey();
+            if (tick > startTick) break;
+            for (CinematicAction action : entry.getValue()) {
+                if (action.getType() == CinematicAction.ActionType.SPAWN_NPC
+                        && sanitize(action.getValue()).equals(targetKey)) {
+                    Location loc = action.getLocation();
+                    if (loc != null) pose = loc.clone();
+                    continue;
+                }
+                if (action.getType() == CinematicAction.ActionType.SHOW_ENTITY) {
+                    String showKey = sanitize(action.getExtra() != null ? action.getExtra() : action.getValue());
+                    if (showKey.equals(targetKey) && action.getLocation() != null) {
+                        pose = action.getLocation().clone();
+                    }
+                    continue;
+                }
+                if (action.getType() != CinematicAction.ActionType.MOVE_NPC) continue;
+                if (!sanitize(action.getExtra()).equals(targetKey)) continue;
+
+                List<Location> path = data.getPathRecord(action.getValue());
+                if (path == null || path.isEmpty()) continue;
+
+                Location origin = action.getLocation();
+                if (origin == null) origin = pose;
+                if (origin == null || origin.getWorld() == null) continue;
+
+                Location last = path.get(path.size() - 1);
+                pose = new Location(
+                        origin.getWorld(),
+                        origin.getX() + last.getX(),
+                        origin.getY() + last.getY(),
+                        origin.getZ() + last.getZ(),
+                        last.getYaw(),
+                        last.getPitch());
+            }
+        }
+        return pose;
+    }
+
+    private Location findLatestSpawn(CinematicData data, String targetSlot, int startTick) {
+        String targetKey = sanitize(targetSlot);
+        Location origin = null;
+        int originTick = Integer.MIN_VALUE;
+        for (var entry : data.getTimeline().entrySet()) {
+            int tick = entry.getKey();
+            if (tick > startTick || tick < originTick) continue;
+            for (CinematicAction action : entry.getValue()) {
+                if (action.getType() == CinematicAction.ActionType.SPAWN_NPC
+                        && sanitize(action.getValue()).equals(targetKey)) {
+                    origin = action.getLocation();
+                    originTick = tick;
+                }
+            }
+        }
+        return origin;
     }
 
     private String sanitize(String id) {

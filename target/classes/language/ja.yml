@@ -205,6 +205,17 @@ menu:
   animation_changepart_lore:
     - "&7特定ボーンのパーツだけ差し替えます。"
     - "&7形式: part>newModel:newPart"
+  animation_gesture: "&dLuxGestures"
+  animation_gesture_lore:
+    - "&7NPCにLuxGesturesを再生します。"
+    - "&7ジェスチャーIDをチャットで入力。"
+    - "&7停止: STOP"
+  animation_am: "&bAnimationManager"
+  animation_am_lore:
+    - "&7NPCにAnimationManagerクリップを再生します。"
+    - "&7形式: model.anim  (例: player.wave)"
+    - "&7視聴者にだけパケットで見えます。"
+    - "&7停止: STOP"
   animation_stop: "&4動作停止"
   animation_stop_lore:
     - "&7再生中のアニメーションを止めます。"
@@ -290,6 +301,8 @@ msg:
   input_wait: "&e待機文を入力 (- で空表示)"
   input_command: "&eコマンドを入力 (# = コンソール)"
   input_animation: "&eModelEngineアニメーション(state)名を入力してください。"
+  input_gesture: "&eLuxGesturesジェスチャーIDを入力 (停止: STOP)"
+  input_am: "&eAnimationManagerクリップを入力 (例: player.wave, 停止: STOP)"
   input_remap: "&eRemap · newModel または model>newModel または model>newModel|map"
   input_changepart: "&eChangePart · part>newModel:newPart または model:part>newModel:newPart"
   input_anim_stop: "&e停止するアニメーション名を入力してください。"
