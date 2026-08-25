@@ -169,22 +169,53 @@ public final class AnimationManagerHook {
      * diamond helmet through its disguise while entity.getEquipment() reports empty
      * air) - see spawnGear()'s javadoc in Play.
      */
+    // Per-watcher-class reflection caches for disguiseEquipmentItem() below. This can
+    // be called up to 6 times per Play on every pose-changed tick (once per
+    // GEAR_ATTACH entry), i.e. potentially every animation frame for every disguised,
+    // animating NPC - re-resolving getMethod() that often would be wasteful, so each
+    // Method (or its absence) is looked up once per watcher Class and cached.
+    private static final java.util.Map<Class<?>, java.util.Optional<Method>> DISGUISE_GET_ITEM_STACK_METHODS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<Class<?>, java.util.Map<EquipmentSlot, java.util.Optional<Method>>> DISGUISE_SLOT_GETTER_METHODS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private static ItemStack disguiseEquipmentItem(Disguise disguise, EquipmentSlot slot) {
         if (disguise == null) return null;
         try {
             Object watcher = disguise.getWatcher();
             if (watcher == null) return null;
-            try {
-                Method getItemStack = watcher.getClass().getMethod("getItemStack", EquipmentSlot.class);
-                Object result = getItemStack.invoke(watcher, slot);
-                if (result instanceof ItemStack item && !item.getType().isAir()) return item;
-            } catch (Throwable ignored) {
-                // Not every LivingWatcher build exposes the generic overload - fall
-                // through to the named per-slot getter below.
+            Class<?> watcherClass = watcher.getClass();
+
+            Method getItemStack = DISGUISE_GET_ITEM_STACK_METHODS.computeIfAbsent(watcherClass, cls -> {
+                try {
+                    return java.util.Optional.of(cls.getMethod("getItemStack", EquipmentSlot.class));
+                } catch (Throwable t) {
+                    return java.util.Optional.empty();
+                }
+            }).orElse(null);
+            if (getItemStack != null) {
+                try {
+                    Object result = getItemStack.invoke(watcher, slot);
+                    if (result instanceof ItemStack item && !item.getType().isAir()) return item;
+                } catch (Throwable ignored) {
+                    // Not every LivingWatcher build exposes the generic overload - fall
+                    // through to the named per-slot getter below.
+                }
             }
-            String getter = DISGUISE_GETTER_NAMES.get(slot);
+
+            String getterName = DISGUISE_GETTER_NAMES.get(slot);
+            if (getterName == null) return null;
+            Method getter = DISGUISE_SLOT_GETTER_METHODS
+                    .computeIfAbsent(watcherClass, cls -> new java.util.concurrent.ConcurrentHashMap<>())
+                    .computeIfAbsent(slot, s -> {
+                        try {
+                            return java.util.Optional.of(watcherClass.getMethod(getterName));
+                        } catch (Throwable t) {
+                            return java.util.Optional.empty();
+                        }
+                    }).orElse(null);
             if (getter == null) return null;
-            Object result = watcher.getClass().getMethod(getter).invoke(watcher);
+            Object result = getter.invoke(watcher);
             return result instanceof ItemStack item && !item.getType().isAir() ? item : null;
         } catch (Throwable t) {
             return null;
@@ -285,13 +316,8 @@ public final class AnimationManagerHook {
         }
         preparePlayback(viewer, entity);
         if (clip == null) {
-            // TEMP DEBUG: tells us whether this play used the packet-limb renderer
-            // (Play class, below) or fell back to the real AnimationManager API
-            // pipeline. Remove once the "arm looks wrong" issue is nailed down.
-            plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packedClip was null -> using playViaApi fallback");
             return playViaApi(viewer, entity, id);
         }
-        plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packedClip resolved -> using packet-limb Play renderer");
 
         int bones;
         int ticks;
@@ -342,15 +368,6 @@ public final class AnimationManagerHook {
             resolveLimbItems.invoke(null, entity, clip, (Consumer<ItemStack[]>) items -> {
                 Play current = byNpc.get(npcId);
                 if (current != play || current.dead) return;
-                current.itemCallbacks++;
-                // TEMP DEBUG: confirms how many times resolveLimbItems actually calls
-                // back for this play and whether the debounce below is still pending
-                // (still waiting) or already fired (spawned) by the time a later call
-                // lands - tells us definitively whether the old 4-tick window was
-                // really too short to catch the real-skin call.
-                plugin.getLogger().info("[AnimationManagerHook] resolveLimbItems callback #" + current.itemCallbacks
-                        + " for '" + id + "' (spawned=" + current.spawned + ", pendingSpawn="
-                        + (current.pendingSpawn != null) + ")");
                 if (!current.spawned) {
                     if (current.pendingSpawn == null) {
                         // First callback for this play - the skin hint has already been
@@ -388,12 +405,8 @@ public final class AnimationManagerHook {
                         still.pendingSpawn = null;
                         still.spawn(items);
                         if (!still.hasLimbs()) {
-                            // TEMP DEBUG: see comment above - the packet-limb spawn
-                            // produced zero live limb entities, so we're bailing out to
-                            // the API fallback after all. If this line shows up,
-                            // PacketHelper's rotation fix never actually rendered
-                            // anything.
-                            plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packet-limb spawn produced 0 limbs -> falling back to playViaApi");
+                            // The packet-limb spawn produced zero live limb entities -
+                            // bail out to the API fallback renderer instead.
                             byNpc.remove(npcId, still);
                             removePlay(still);
                             // The disguise was already stripped above for this
@@ -676,6 +689,20 @@ public final class AnimationManagerHook {
         // One slot per GEAR_ATTACH entry; null where that attach has no matching
         // bone in this clip or the NPC has nothing equipped in that slot.
         final ArmorStand[] gearStands = new ArmorStand[GEAR_ATTACH.length];
+        // Precomputed once in the constructor: GEAR_ATTACH[g].bone()'s index into
+        // limbKeys, or -1 if this clip has no matching bone. Replaces a per-tick,
+        // per-attach O(boneCount) linear scan (boneIndexOf()) with a single array
+        // read in the hot spawnGear()/tickGear() loops.
+        final int[] gearBoneIndex = new int[GEAR_ATTACH.length];
+        // Last item actually applied to gearStands[g] - lets tickGear() skip the
+        // clone()+setItem() round-trip on a pose-changed tick where the equipped
+        // item hasn't actually changed since the last check.
+        final ItemStack[] gearLastItem = new ItemStack[GEAR_ATTACH.length];
+        // Scratch buffers reused by placeGearLoc() across every spawnGear()/tickGear()
+        // call instead of allocating three new double[3]s per call.
+        private final double[] gearBonePos = new double[3];
+        private final double[] gearLocal = new double[3];
+        private final double[] gearLocalYawed = new double[3];
         final Location loc = new Location(null, 0, 0, 0);
         ItemStack[] items;
         boolean spawned;
@@ -694,8 +721,6 @@ public final class AnimationManagerHook {
         // (see play() below) - null once spawn() has actually run, or if nothing
         // is currently pending.
         BukkitTask pendingSpawn;
-        // TEMP DEBUG counter - see the resolveLimbItems callback log line above.
-        int itemCallbacks;
 
         Play(Player viewer, Entity npc, UUID npcId, int boneCount, int ticks, byte loop,
              float[] pos, float[] rot, boolean[] hidden, SavedDisguise disguise, String[] limbKeys) {
@@ -712,6 +737,9 @@ public final class AnimationManagerHook {
             this.holding = new boolean[boneCount];
             this.disguise = disguise;
             this.limbKeys = limbKeys;
+            for (int g = 0; g < GEAR_ATTACH.length; g++) {
+                gearBoneIndex[g] = boneIndexOf(GEAR_ATTACH[g].bone());
+            }
         }
 
         private int boneIndexOf(String want) {
@@ -736,15 +764,20 @@ public final class AnimationManagerHook {
             return gear == null || gear.getType().isAir() ? null : gear;
         }
 
-        /** Fills loc with this attach's current world position, given bx/by/bz/yaw/sin/cos already snapshotted. */
+        /**
+         * Fills loc with this attach's current world position, given
+         * bx/by/bz/yaw/sin/cos already snapshotted. Uses the gearBonePos/gearLocal/
+         * gearLocalYawed scratch fields instead of allocating fresh double[3]s -
+         * safe because Play is only ever ticked/spawned on the main thread.
+         */
         private void placeGearLoc(double bx, double by, double bz, float yaw, double sin, double cos,
-                                   int o, GearAttach attach, double[] bonePos, double[] local, double[] localYawed) {
-            rotateYaw(pos[o], pos[o + 1], pos[o + 2], sin, cos, bonePos);
-            relativeOffset(attach.ox(), attach.oy(), attach.oz(), rot[o], rot[o + 1], rot[o + 2], local);
-            rotateYaw(local[0], local[1], local[2], sin, cos, localYawed);
-            loc.setX(bx + bonePos[0] + localYawed[0]);
-            loc.setY(by + bonePos[1] + localYawed[1]);
-            loc.setZ(bz + bonePos[2] + localYawed[2]);
+                                   int o, GearAttach attach) {
+            rotateYaw(pos[o], pos[o + 1], pos[o + 2], sin, cos, gearBonePos);
+            relativeOffset(attach.ox(), attach.oy(), attach.oz(), rot[o], rot[o + 1], rot[o + 2], gearLocal);
+            rotateYaw(gearLocal[0], gearLocal[1], gearLocal[2], sin, cos, gearLocalYawed);
+            loc.setX(bx + gearBonePos[0] + gearLocalYawed[0]);
+            loc.setY(by + gearBonePos[1] + gearLocalYawed[1]);
+            loc.setZ(bz + gearBonePos[2] + gearLocalYawed[2]);
             loc.setYaw(yaw);
             loc.setPitch(0f);
         }
@@ -780,19 +813,18 @@ public final class AnimationManagerHook {
             Disguise sourceDisguise = disguise != null ? disguise.disguise() : null;
             EntityEquipment equipment = npc instanceof LivingEntity living ? living.getEquipment() : null;
             if (sourceDisguise == null && equipment == null) return;
-            double[] bonePos = new double[3];
-            double[] local = new double[3];
-            double[] localYawed = new double[3];
             for (int g = 0; g < GEAR_ATTACH.length; g++) {
                 GearAttach attach = GEAR_ATTACH[g];
-                int bone = boneIndexOf(attach.bone());
+                int bone = gearBoneIndex[g];
                 if (bone < 0) continue;
                 ItemStack gear = currentGear(sourceDisguise, equipment, attach.source());
                 if (gear == null) continue;
                 int o = poseBase + bone * 3;
-                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
-                gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), gear.clone(),
+                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach);
+                ItemStack worn = gear.clone();
+                gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), worn,
                         attach.pose().ordinal(), rot[o], rot[o + 1], rot[o + 2]);
+                gearLastItem[g] = worn;
             }
         }
 
@@ -811,12 +843,9 @@ public final class AnimationManagerHook {
             if (!moved && !poseChanged) return;
             Disguise sourceDisguise = disguise != null ? disguise.disguise() : null;
             EntityEquipment equipment = npc instanceof LivingEntity living ? living.getEquipment() : null;
-            double[] bonePos = new double[3];
-            double[] local = new double[3];
-            double[] localYawed = new double[3];
             for (int g = 0; g < GEAR_ATTACH.length; g++) {
                 GearAttach attach = GEAR_ATTACH[g];
-                int bone = boneIndexOf(attach.bone());
+                int bone = gearBoneIndex[g];
                 if (bone < 0) continue;
                 int o = poseBase + bone * 3;
                 ArmorStand stand = gearStands[g];
@@ -827,19 +856,29 @@ public final class AnimationManagerHook {
                             stand.remove();
                         }
                         gearStands[g] = null;
+                        gearLastItem[g] = null;
                         continue;
                     }
                     if (stand == null || !stand.isValid()) {
-                        placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
-                        gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), gear.clone(),
+                        placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach);
+                        ItemStack worn = gear.clone();
+                        gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), worn,
                                 attach.pose().ordinal(), rot[o], rot[o + 1], rot[o + 2]);
+                        gearLastItem[g] = worn;
                         continue; // freshly spawned already at the right pose/position
                     }
-                    stand.getEquipment().setItem(attach.wear(), gear.clone());
+                    // Only re-clone + re-set the worn item when it actually changed
+                    // since the last check - isSimilar() ignores stack amount (which
+                    // a single worn piece never varies) but catches a real swap.
+                    if (gearLastItem[g] == null || !gearLastItem[g].isSimilar(gear)) {
+                        ItemStack worn = gear.clone();
+                        stand.getEquipment().setItem(attach.wear(), worn);
+                        gearLastItem[g] = worn;
+                    }
                 }
                 stand = gearStands[g];
                 if (stand == null || !stand.isValid()) continue;
-                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
+                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach);
                 PacketHelper.repositionLimbStand(viewer, stand, loc);
                 if (poseChanged) {
                     applyGearPose(stand, attach.pose(), rot[o], rot[o + 1], rot[o + 2]);
@@ -900,12 +939,6 @@ public final class AnimationManagerHook {
             lastZ = bz;
             lastYaw = yaw;
             lastFrame = sampled;
-            // TEMP DEBUG: confirms whether spawn() really did land on the frozen
-            // frame 0 (frame should read 0 here - if it doesn't, something is
-            // advancing playback before spawn(), which would explain a wrong initial
-            // pose) and how many limb stands actually came back alive.
-            plugin.getLogger().info("[AnimationManagerHook] spawn(): frame=" + frame + " sampled=" + sampled
-                    + " boneCount=" + boneCount + " liveLimbs=" + liveLimbCount());
             if (hasLimbs()) {
                 viewer.hideEntity(plugin, npc);
                 // The disguise itself (if any) was already fully stripped in
@@ -917,13 +950,6 @@ public final class AnimationManagerHook {
         boolean hasLimbs() {
             for (ArmorStand stand : stands) if (stand != null && stand.isValid()) return true;
             return false;
-        }
-
-        // TEMP DEBUG helper - see the spawn() log line above.
-        int liveLimbCount() {
-            int n = 0;
-            for (ArmorStand stand : stands) if (stand != null && stand.isValid()) n++;
-            return n;
         }
 
         boolean keepsSession() {

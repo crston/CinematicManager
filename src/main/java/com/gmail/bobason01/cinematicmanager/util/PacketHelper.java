@@ -437,15 +437,37 @@ public final class PacketHelper {
      * against plain spigot-api, which doesn't declare them, so they are called purely
      * via reflection here (no compile-time reference to the classes/methods at all)
      * and silently no-op on a server that doesn't have them.
+     * <p>
+     * The reflective lookups (Class.forName / getMethod / Enum.valueOf) are resolved
+     * once and cached in static fields, instead of being redone on every single
+     * ArmorStand spawn - this can be called up to ~18 times per animation trigger
+     * (limb stands + gear stands), so re-resolving on every call would be pure waste.
      */
-    private static void lockEquipmentSlots(ArmorStand stand) {
+    private static volatile boolean disabledSlotsAttempted;
+    private static Object disabledSlotsValues;
+    private static Method disabledSlotsMethod;
+
+    private static volatile boolean equipmentLockAttempted;
+    private static Object[] equipmentLockSlots;
+    private static Object equipmentLockAdding;
+    private static Object equipmentLockRemoving;
+    private static Method equipmentLockMethod;
+
+    private static void resolveDisabledSlotsReflection() {
+        if (disabledSlotsAttempted) return;
+        disabledSlotsAttempted = true;
         try {
             Class<?> slotClass = Class.forName("org.bukkit.inventory.EquipmentSlot");
             Object slots = slotClass.getMethod("values").invoke(null);
-            Method setDisabled = stand.getClass().getMethod("setDisabledSlots", slots.getClass());
-            setDisabled.invoke(stand, slots);
+            disabledSlotsMethod = ArmorStand.class.getMethod("setDisabledSlots", slots.getClass());
+            disabledSlotsValues = slots;
         } catch (Throwable ignored) {
         }
+    }
+
+    private static void resolveEquipmentLockReflection() {
+        if (equipmentLockAttempted) return;
+        equipmentLockAttempted = true;
         try {
             Class<?> slotClass = Class.forName("org.bukkit.inventory.EquipmentSlot");
             Class<?> lockTypeClass = Class.forName("org.bukkit.entity.ArmorStand$LockType");
@@ -453,13 +475,31 @@ public final class PacketHelper {
             Object adding = Enum.valueOf((Class<Enum>) (Class) lockTypeClass, "ADDING_OR_CHANGING");
             @SuppressWarnings({"unchecked", "rawtypes"})
             Object removing = Enum.valueOf((Class<Enum>) (Class) lockTypeClass, "REMOVING_OR_CHANGING");
-            Method addLock = stand.getClass().getMethod("addEquipmentLock", slotClass, lockTypeClass);
-            Object[] slotValues = (Object[]) slotClass.getMethod("values").invoke(null);
-            for (Object slot : slotValues) {
-                addLock.invoke(stand, slot, adding);
-                addLock.invoke(stand, slot, removing);
-            }
+            equipmentLockMethod = ArmorStand.class.getMethod("addEquipmentLock", slotClass, lockTypeClass);
+            equipmentLockSlots = (Object[]) slotClass.getMethod("values").invoke(null);
+            equipmentLockAdding = adding;
+            equipmentLockRemoving = removing;
         } catch (Throwable ignored) {
+        }
+    }
+
+    private static void lockEquipmentSlots(ArmorStand stand) {
+        resolveDisabledSlotsReflection();
+        if (disabledSlotsMethod != null) {
+            try {
+                disabledSlotsMethod.invoke(stand, disabledSlotsValues);
+            } catch (Throwable ignored) {
+            }
+        }
+        resolveEquipmentLockReflection();
+        if (equipmentLockMethod != null) {
+            try {
+                for (Object slot : equipmentLockSlots) {
+                    equipmentLockMethod.invoke(stand, slot, equipmentLockAdding);
+                    equipmentLockMethod.invoke(stand, slot, equipmentLockRemoving);
+                }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
