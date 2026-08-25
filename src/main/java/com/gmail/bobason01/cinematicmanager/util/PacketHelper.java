@@ -23,12 +23,17 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSe
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.util.EulerAngle;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -262,19 +267,275 @@ public final class PacketHelper {
         }
     }
 
+    /** Small enough that even a client-side lerp over this distance is imperceptible
+     *  in a single tick, unlike the earlier 256-block staging spot that visibly
+     *  climbed into place over multiple frames. */
+    private static final double LIMB_STAGING_Y_OFFSET = 4.0;
+
     /**
      * Viewer-only PixelSkin limb: invisible armor stand, item in main hand, right-arm pose.
      * Never broadcast — other players never receive these packets.
+     * <p>
+     * The vanilla Spawn Entity packet cannot carry metadata (invisible flag, limb
+     * rotation) - that only ever arrives in a follow-up Entity Metadata packet, so the
+     * entity necessarily exists for a moment in a visible, unposed state between the
+     * two. Staging the spawn 256 blocks below and position-syncing up used to "fix"
+     * this, but that distance was far enough that the client visibly interpolated the
+     * climb instead of snapping - limbs appeared to rise out of the ground and
+     * assemble over several frames, which was worse than the flash it replaced. This
+     * uses a much smaller staging offset instead: still spawned somewhere other than
+     * the final pose (so a stray visible-default frame isn't sitting right on top of
+     * the model), but short enough that even an unwanted lerp resolves within a single
+     * tick and is not noticeable.
      */
+    private static volatile Method armorStandGetHandle;
+    private static volatile Method armorStandMoveTo;
+    private static volatile Method armorStandSetOld;
+    private static volatile boolean armorStandReflectionResolved;
+
+    /**
+     * Same NMS moveTo/setOldPosAndRot reflection AnimationManager's own BoneDisplay
+     * uses to snap an ArmorStand with no client-side interpolation. Falls back to a
+     * plain Bukkit teleport if the reflective lookup ever fails (version drift).
+     */
+    private static void resolveArmorStandReflection(ArmorStand stand) {
+        if (armorStandReflectionResolved) return;
+        synchronized (PacketHelper.class) {
+            if (armorStandReflectionResolved) return;
+            try {
+                Method handle = stand.getClass().getMethod("getHandle");
+                Object nms = handle.invoke(stand);
+                Method move = findMoveMethod(nms.getClass());
+                Method old = findNoArgMethod(nms.getClass(), "setOldPosAndRot", "setOldPosRot", "applyAndSetOldPosAndRot");
+                if (move != null) {
+                    armorStandGetHandle = handle;
+                    armorStandMoveTo = move;
+                    armorStandSetOld = old;
+                }
+            } catch (Throwable ignored) {
+            }
+            armorStandReflectionResolved = true;
+        }
+    }
+
+    private static Method findMoveMethod(Class<?> type) {
+        Class<?> cursor = type;
+        while (cursor != null && cursor != Object.class) {
+            for (String name : new String[]{"moveTo", "absMoveTo", "snapTo"}) {
+                try {
+                    return cursor.getMethod(name, double.class, double.class, double.class, float.class, float.class);
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            cursor = cursor.getSuperclass();
+        }
+        return null;
+    }
+
+    private static Method findNoArgMethod(Class<?> type, String... names) {
+        Class<?> cursor = type;
+        while (cursor != null && cursor != Object.class) {
+            for (String name : names) {
+                try {
+                    return cursor.getMethod(name);
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            cursor = cursor.getSuperclass();
+        }
+        return null;
+    }
+
+    // Diagnostics only - see describeArmorStandSnapMode(). Not used for any control flow.
+    private static volatile boolean armorStandFastPathEverSucceeded;
+    private static volatile boolean armorStandFastPathEverFailed;
+
+    /**
+     * Which position-sync path snapArmorStand() has actually taken so far this run:
+     * "nms-reflect" (no client interpolation - the good path, same one BoneDisplay
+     * uses), "teleport-fallback" (plain Bukkit teleport, which the client CAN
+     * interpolate/lerp over a few frames - a likely source of visible "growing
+     * together" pops if this shows up), or "unresolved" (snapArmorStand hasn't run
+     * yet). Logged once from AnimationManagerHook so a report from the user's console
+     * tells us definitively which path is live, instead of guessing from video alone.
+     */
+    public static String describeArmorStandSnapMode() {
+        if (!armorStandReflectionResolved) return "unresolved";
+        if (armorStandFastPathEverSucceeded && !armorStandFastPathEverFailed) return "nms-reflect";
+        if (armorStandFastPathEverSucceeded) return "nms-reflect (intermittent fallback seen)";
+        if (armorStandGetHandle == null || armorStandMoveTo == null) return "teleport-fallback (methods not found)";
+        return "teleport-fallback (invoke failed)";
+    }
+
+    /** Teleport a real limb ArmorStand with no client interpolation (mirrors BoneDisplay.snap). */
+    public static void snapArmorStand(ArmorStand stand, double x, double y, double z, float yaw) {
+        if (stand == null || !stand.isValid()) return;
+        resolveArmorStandReflection(stand);
+        Method handle = armorStandGetHandle;
+        Method move = armorStandMoveTo;
+        if (handle != null && move != null) {
+            try {
+                Object nms = handle.invoke(stand);
+                move.invoke(nms, x, y, z, yaw, 0f);
+                if (armorStandSetOld != null) {
+                    armorStandSetOld.invoke(nms);
+                }
+                stand.setRotation(yaw, 0f);
+                armorStandFastPathEverSucceeded = true;
+                return;
+            } catch (Throwable ignored) {
+                armorStandFastPathEverFailed = true;
+            }
+        }
+        Location dest = stand.getLocation();
+        dest.setX(x);
+        dest.setY(y);
+        dest.setZ(z);
+        dest.setYaw(yaw);
+        dest.setPitch(0f);
+        stand.teleport(dest);
+        stand.setRotation(yaw, 0f);
+    }
+
+    /**
+     * Reposition a real limb ArmorStand for one viewer with a protocol-level,
+     * guaranteed no-interpolation position sync - used instead of relying on
+     * snapArmorStand()'s NMS moveTo/setOldPosAndRot reflection, which targets a
+     * pre-1.20.2 "movement rework" mechanism that may no longer reliably suppress
+     * client-side interpolation on newer server builds (that reflective path either
+     * silently fails to resolve, or resolves but no longer has the intended
+     * no-interpolation effect against a modern client - either way the visible
+     * symptom is the same: limbs visibly drifting/lerping toward their new pose for
+     * a few frames instead of snapping, looking like the NPC's body is
+     * assembling itself out of scattered pieces).
+     * <p>
+     * {@code stand.teleport(loc)} still runs first so the entity's own server-side
+     * bookkeeping (hitbox/location queries) stays correct - Bukkit's own broadcast
+     * from that call may itself be interpolated by the client, but it is
+     * immediately followed, in the same tick's packet flush, by an explicit
+     * {@code WrapperPlayServerEntityPositionSync} (the same 1.21.2+ packet the old
+     * packet-only limb renderer used - see teleportFakeEntitySnapped) aimed at this
+     * real entity's own network id. The client processes both packets together and
+     * only ever renders the final, corrected position - this packet is the
+     * documented, version-correct "this IS where the entity is, do not
+     * interpolate" signal, so it does not depend on any reflective NMS method
+     * lookup succeeding.
+     */
+    public static void repositionLimbStand(Player viewer, ArmorStand stand, Location loc) {
+        if (viewer == null || stand == null || !stand.isValid() || loc == null) return;
+        try {
+            stand.teleport(loc);
+        } catch (Throwable ignored) {
+        }
+        teleportFakeEntitySnapped(viewer, stand.getEntityId(), loc);
+    }
+
+    /**
+     * Best-effort armor-stand equipment lock so the viewer can't right-click a limb
+     * stand and pull/swap its held item. {@code ArmorStand#setDisabledSlots} /
+     * {@code #addEquipmentLock} are Paper-only additions - this project compiles
+     * against plain spigot-api, which doesn't declare them, so they are called purely
+     * via reflection here (no compile-time reference to the classes/methods at all)
+     * and silently no-op on a server that doesn't have them.
+     */
+    private static void lockEquipmentSlots(ArmorStand stand) {
+        try {
+            Class<?> slotClass = Class.forName("org.bukkit.inventory.EquipmentSlot");
+            Object slots = slotClass.getMethod("values").invoke(null);
+            Method setDisabled = stand.getClass().getMethod("setDisabledSlots", slots.getClass());
+            setDisabled.invoke(stand, slots);
+        } catch (Throwable ignored) {
+        }
+        try {
+            Class<?> slotClass = Class.forName("org.bukkit.inventory.EquipmentSlot");
+            Class<?> lockTypeClass = Class.forName("org.bukkit.entity.ArmorStand$LockType");
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object adding = Enum.valueOf((Class<Enum>) (Class) lockTypeClass, "ADDING_OR_CHANGING");
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object removing = Enum.valueOf((Class<Enum>) (Class) lockTypeClass, "REMOVING_OR_CHANGING");
+            Method addLock = stand.getClass().getMethod("addEquipmentLock", slotClass, lockTypeClass);
+            Object[] slotValues = (Object[]) slotClass.getMethod("values").invoke(null);
+            for (Object slot : slotValues) {
+                addLock.invoke(stand, slot, adding);
+                addLock.invoke(stand, slot, removing);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Real, Bukkit-native limb ArmorStand instead of a manual two-packet spawn. All
+     * invisibility/pose/equipment is set INSIDE the spawn consumer, exactly like
+     * AnimationManager's own BoneDisplay renderer - Bukkit bundles that state with the
+     * entity before it is ever added to the world or broadcast to anyone, so there is
+     * no window where a client can see a default-visible, unposed stand. This is what
+     * finally closes the gap the packet-only spawnLimbStand() could never fully close:
+     * the vanilla Spawn Entity packet cannot carry metadata, so any spawn-then-packet
+     * approach necessarily has at least one frame where the entity exists unposed
+     * before its Entity Metadata packet lands, no matter how small the staging offset.
+     * <p>
+     * "Viewer-only" is preserved by immediately hiding the freshly spawned stand from
+     * every other online player in the same synchronous call, before the server's
+     * entity tracker gets a chance to broadcast its spawn - the same
+     * hide-from-everyone-but-viewer technique this class's caller already uses for the
+     * am_limb/am_name stands in the playViaApi fallback path.
+     */
+    public static ArmorStand spawnLimbStandReal(Plugin plugin, Player viewer, Location loc, ItemStack hand, float rx, float ry, float rz) {
+        if (plugin == null || viewer == null || loc == null || loc.getWorld() == null) return null;
+        try {
+            ArmorStand stand = loc.getWorld().spawn(loc, ArmorStand.class, (ArmorStand spawned) -> {
+                spawned.setPersistent(false);
+                spawned.setInvisible(true);
+                spawned.setCustomNameVisible(false);
+                spawned.setCustomName(null);
+                spawned.setMarker(false);
+                spawned.setGravity(false);
+                spawned.setSilent(true);
+                spawned.setBasePlate(false);
+                spawned.setArms(true);
+                spawned.setSmall(false);
+                spawned.setInvulnerable(true);
+                spawned.setCollidable(false);
+                spawned.setCanPickupItems(false);
+                spawned.setRemoveWhenFarAway(false);
+                spawned.addScoreboardTag("am_limb");
+                lockEquipmentSlots(spawned);
+                if (hand != null && !hand.getType().isAir()) {
+                    spawned.getEquipment().setItemInMainHand(hand);
+                }
+                spawned.setRightArmPose(new EulerAngle(rx, ry, rz));
+                // No extra position-snap needed here: world.spawn(loc, ...) already
+                // places the entity at loc/yaw before this consumer ever runs, and a
+                // brand new spawn has no "previous" position for a client to
+                // interpolate from - the interpolation risk only applies to
+                // REPOSITIONING an already-visible stand later (see
+                // repositionLimbStand(), used by every subsequent tick).
+            });
+            if (stand != null) {
+                UUID viewerId = viewer.getUniqueId();
+                for (Player other : Bukkit.getOnlinePlayers()) {
+                    if (!other.getUniqueId().equals(viewerId)) {
+                        other.hideEntity(plugin, stand);
+                    }
+                }
+            }
+            return stand;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public static int spawnLimbStand(Player viewer, Location loc, ItemStack hand, float rx, float ry, float rz) {
         if (viewer == null || loc == null) return 0;
         int entityId = FAKE_ENTITY_IDS.getAndIncrement();
         try {
+            Location staging = loc.clone();
+            staging.setY(staging.getY() - LIMB_STAGING_Y_OFFSET);
             send(viewer, new WrapperPlayServerSpawnEntity(
                     entityId,
                     Optional.of(UUID.randomUUID()),
                     EntityTypes.ARMOR_STAND,
-                    new Vector3d(loc.getX(), loc.getY(), loc.getZ()),
+                    new Vector3d(staging.getX(), staging.getY(), staging.getZ()),
                     0f,
                     loc.getYaw(),
                     loc.getYaw(),
@@ -285,6 +546,7 @@ public final class PacketHelper {
             if (hand != null && !hand.getType().isAir()) {
                 setEquipment(viewer, entityId, EquipmentSlot.MAIN_HAND, hand);
             }
+            teleportFakeEntitySnapped(viewer, entityId, loc);
             return entityId;
         } catch (Throwable t) {
             return 0;
@@ -299,7 +561,7 @@ public final class PacketHelper {
             meta.add(new EntityData<>(4, EntityDataTypes.BOOLEAN, true));
             meta.add(new EntityData<>(5, EntityDataTypes.BOOLEAN, true));
             meta.add(new EntityData<>(15, EntityDataTypes.BYTE, LIMB_STAND_FLAGS));
-            meta.add(new EntityData<>(RIGHT_ARM_POSE, EntityDataTypes.ROTATION, new Vector3f(rx, ry, rz)));
+            meta.add(new EntityData<>(RIGHT_ARM_POSE, EntityDataTypes.ROTATION, toDegreesVector(rx, ry, rz)));
             send(viewer, new WrapperPlayServerEntityMetadata(entityId, meta));
         } catch (Throwable ignored) {
         }
@@ -309,11 +571,31 @@ public final class PacketHelper {
         if (viewer == null || entityId == 0) return;
         try {
             List<EntityData<?>> meta = List.of(
-                    new EntityData<>(RIGHT_ARM_POSE, EntityDataTypes.ROTATION, new Vector3f(rx, ry, rz))
+                    new EntityData<>(RIGHT_ARM_POSE, EntityDataTypes.ROTATION, toDegreesVector(rx, ry, rz))
             );
             send(viewer, new WrapperPlayServerEntityMetadata(entityId, meta));
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * AnimationManager's baked clip.rot values are RADIANS (they feed straight into
+     * Bukkit's org.bukkit.util.EulerAngle on AnimationManager's own side, which is a
+     * radians API). But the raw ArmorStand pose entity-data field this class writes
+     * directly to the wire (EntityDataTypes.ROTATION) is the vanilla protocol's
+     * "Rotations" type, which vanilla clients read as DEGREES - CraftBukkit itself
+     * converts EulerAngle's radians to degrees via Math.toDegrees() before handing a
+     * pose to NMS. Skipping that conversion here made every limb pose ~57x smaller
+     * than intended (radians used where degrees were expected), so animated poses
+     * collapsed to nearly straight/neutral instead of the real baked bend - looking
+     * like limbs were detached from / floating away from their proper pose.
+     */
+    private static Vector3f toDegreesVector(float rx, float ry, float rz) {
+        return new Vector3f(
+                (float) Math.toDegrees(rx),
+                (float) Math.toDegrees(ry),
+                (float) Math.toDegrees(rz)
+        );
     }
 
     private static EntityType resolveEntityType(String name) {

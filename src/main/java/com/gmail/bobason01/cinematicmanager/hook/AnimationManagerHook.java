@@ -2,12 +2,16 @@ package com.gmail.bobason01.cinematicmanager.hook;
 
 import com.gmail.bobason01.cinematicmanager.CinematicManager;
 import com.gmail.bobason01.cinematicmanager.util.PacketHelper;
-import com.github.retrooper.packetevents.protocol.player.EquipmentSlot;
+import me.libraryaddict.disguise.DisguiseAPI;
+import me.libraryaddict.disguise.disguisetypes.Disguise;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.EulerAngle;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -18,14 +22,39 @@ import java.util.function.Consumer;
 /**
  * Soft-depend AnimationManager playback for cinematic NPCs.
  * <p>
- * No server ArmorStands: baked clip arrays are sampled on the cinematic tick and
- * sent as viewer-only packet limbs. Other players never receive spawn/pose packets.
+ * Baked clip arrays are sampled on the cinematic tick and rendered as real, viewer-only
+ * limb ArmorStands (same atomic spawn-consumer technique as AnimationManager's own
+ * BoneDisplay renderer, so there is no packet-order window where a stand is briefly
+ * visible unposed). Every limb stand is hidden from every player but the intended
+ * viewer immediately after spawn, so other players never see them.
  */
 public final class AnimationManagerHook {
 
     private static final double POS_EPS_SQ = 1.0E-8D;
     private static final float YAW_EPS = 0.01f;
     private static final float DEG2RAD = (float) (Math.PI / 180.0D);
+    /**
+     * How long to wait after the LAST resolveLimbItems callback before actually
+     * spawning, so a fast Steve-fallback call gets superseded by the real-skin call
+     * if the real one lands within this window (see play() below).
+     * <p>
+     * This was widened to 20 ticks (1s) while chasing a "scatter, then assemble"
+     * visual bug, on the theory that resolveLimbItems' documented second ("real
+     * skin") callback was arriving after a too-short debounce and its
+     * refreshItems() swap was what looked like the limbs self-correcting. That
+     * theory was DISPROVEN by direct log evidence: in the actual failing case,
+     * resolveLimbItems only ever called back once. The real cause of the
+     * scatter/assemble bug was unrelated and has since been fixed (see spawn()'s
+     * bx/by/bz snapshot comment) - it was a Location-aliasing bug in spawn()'s
+     * per-bone loop that produced wrong cascading spawn coordinates, nothing to do
+     * with item/skin resolution timing at all. With that fixed, a full 1s wait here
+     * serves no purpose except making every animation visibly late to start, so
+     * this is back down to a short safety margin - just enough to coalesce a
+     * genuine near-simultaneous double callback. A real second callback that lands
+     * later than this still isn't lost: once already spawned, refreshItems() swaps
+     * its items into the existing limb stands in place - no respawn, no scatter.
+     */
+    private static final long SPAWN_DEBOUNCE_TICKS = 2L;
 
     private final CinematicManager plugin;
     private final boolean enabled;
@@ -45,6 +74,18 @@ public final class AnimationManagerHook {
     private final ConcurrentHashMap<UUID, Play> byNpc = new ConcurrentHashMap<>();
     private Play[] plays = new Play[4];
     private int playCount;
+
+    /**
+     * Same fix LuxGesturesHook already uses for the identical problem (see its
+     * stashDisguise/restoreDisguise): a LibsDisguise body runs its own independent
+     * packet loop that Bukkit's hideEntity/showEntity does not govern, so just hiding
+     * the base entity was not enough to keep the disguised body from showing through
+     * our own animated packet limbs. Toggling the disguise watcher's invisible flag
+     * (the first attempt) was not reliable either. Fully removing the disguise for
+     * the duration of the play - like Lux does - and re-attaching the exact same
+     * disguise afterward is the version that is proven to work.
+     */
+    private record SavedDisguise(Disguise disguise, Player viewer) {}
 
     public AnimationManagerHook(CinematicManager plugin) {
         this.plugin = plugin;
@@ -107,8 +148,13 @@ public final class AnimationManagerHook {
         }
         preparePlayback(viewer, entity);
         if (clip == null) {
+            // TEMP DEBUG: tells us whether this play used the packet-limb renderer
+            // (Play class, below) or fell back to the real AnimationManager API
+            // pipeline. Remove once the "arm looks wrong" issue is nailed down.
+            plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packedClip was null -> using playViaApi fallback");
             return playViaApi(viewer, entity, id);
         }
+        plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packedClip resolved -> using packet-limb Play renderer");
 
         int bones;
         int ticks;
@@ -133,20 +179,84 @@ public final class AnimationManagerHook {
         }
 
         UUID npcId = entity.getUniqueId();
-        Play play = new Play(viewer, entity, npcId, bones, ticks, loop, pos, rot, hidden);
+        // Disguise is stashed inside the resolveLimbItems callback below (right before
+        // the debounced spawn()), not before this call: AnimationManager has its own
+        // DisguiseSkinLookup that reads the skin texture straight off a LibsDisguise
+        // PlayerDisguise when one is still attached to the entity (see
+        // SkinCache#hintOf in AnimationManager). Undisguising before this call meant
+        // the entity (a bare marker ArmorStand) had no skin of its own by the time
+        // AnimationManager looked for one, so it silently fell back to the generic
+        // Steve texture instead of the NPC's real skin.
+        Play play = new Play(viewer, entity, npcId, bones, ticks, loop, pos, rot, hidden, null);
         addPlay(play);
 
         try {
             resolveLimbItems.invoke(null, entity, clip, (Consumer<ItemStack[]>) items -> {
                 Play current = byNpc.get(npcId);
                 if (current != play || current.dead) return;
+                current.itemCallbacks++;
+                // TEMP DEBUG: confirms how many times resolveLimbItems actually calls
+                // back for this play and whether the debounce below is still pending
+                // (still waiting) or already fired (spawned) by the time a later call
+                // lands - tells us definitively whether the old 4-tick window was
+                // really too short to catch the real-skin call.
+                plugin.getLogger().info("[AnimationManagerHook] resolveLimbItems callback #" + current.itemCallbacks
+                        + " for '" + id + "' (spawned=" + current.spawned + ", pendingSpawn="
+                        + (current.pendingSpawn != null) + ")");
                 if (!current.spawned) {
-                    current.spawn(items);
-                    if (!current.hasLimbs()) {
-                        byNpc.remove(npcId, current);
-                        removePlay(current);
-                        playViaApi(viewer, entity, id);
+                    if (current.pendingSpawn == null) {
+                        // First callback for this play - the skin hint has already been
+                        // read (and cached) off the still-attached disguise by the
+                        // resolveLimbItems call that led to this callback, so it's safe
+                        // to strip the disguise body now. A LibsDisguise body runs its
+                        // own independent packet loop that viewer.hideEntity() does not
+                        // govern, and undisguiseToAll() only removes the disguise from
+                        // LibsDisguises' own bookkeeping here - the actual "stop
+                        // broadcasting the disguised body" effect follows on
+                        // LibsDisguises' own next scheduled pass, not synchronously.
+                        current.disguise = stashDisguise(viewer, entity);
+                    } else {
+                        // A later callback landed before the debounced spawn fired -
+                        // cancel it so only the newest items ever get used.
+                        current.pendingSpawn.cancel();
                     }
+                    // Debounced instead of a flat delay: resolveLimbItems's own contract
+                    // is "Steve immediately, real skin when ready - onItems may run
+                    // twice". Spawning off the very first (fast, Steve-fallback) call
+                    // used to visibly show placeholder-skinned/placeholder-modeled limb
+                    // pieces for a few frames before the real-skin callback swapped them
+                    // in - looking exactly like the NPC assembling itself out of
+                    // fragments right after it appears. Every callback now (re)starts a
+                    // short wait instead: if a second call lands before it fires, its
+                    // items replace the pending ones and the timer restarts, so we only
+                    // ever spawn once - with whichever items turned out to be the LAST
+                    // (most resolved) ones actually received - and the very first frame
+                    // the viewer sees is already the final pose with the final skin.
+                    current.pendingSpawn = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        Play still = byNpc.get(npcId);
+                        if (still != current || still.dead || still.spawned) {
+                            return;
+                        }
+                        still.pendingSpawn = null;
+                        still.spawn(items);
+                        if (!still.hasLimbs()) {
+                            // TEMP DEBUG: see comment above - the packet-limb spawn
+                            // produced zero live limb entities, so we're bailing out to
+                            // the API fallback after all. If this line shows up,
+                            // PacketHelper's rotation fix never actually rendered
+                            // anything.
+                            plugin.getLogger().info("[AnimationManagerHook] '" + id + "': packet-limb spawn produced 0 limbs -> falling back to playViaApi");
+                            byNpc.remove(npcId, still);
+                            removePlay(still);
+                            // The disguise was already stripped above for this
+                            // abandoned Play - restore it immediately rather than
+                            // leaking it, since playViaApi() below starts an entirely
+                            // different renderer.
+                            restoreDisguise(entity, still.disguise);
+                            still.disguise = null;
+                            playViaApi(viewer, entity, id);
+                        }
+                    }, SPAWN_DEBOUNCE_TICKS);
                 } else {
                     current.refreshItems(items);
                 }
@@ -267,7 +377,8 @@ public final class AnimationManagerHook {
             } catch (Throwable ignored) {
             }
         }
-        restoreNpc(entity, play != null && play.viewer != null ? play.viewer : viewer);
+        restoreNpc(entity, play != null && play.viewer != null ? play.viewer : viewer,
+                play != null ? play.disguise : null);
     }
 
     public void tick(Player viewer) {
@@ -288,7 +399,7 @@ public final class AnimationManagerHook {
                     } catch (Throwable ignored) {
                     }
                 }
-                restoreNpc(play.npc, play.viewer);
+                restoreNpc(play.npc, play.viewer, play.disguise);
                 continue;
             }
             i++;
@@ -304,7 +415,7 @@ public final class AnimationManagerHook {
                 byNpc.remove(play.npcId, play);
                 removeAt(i);
                 play.destroy();
-                restoreNpc(play.npc, play.viewer);
+                restoreNpc(play.npc, play.viewer, play.disguise);
             }
         }
     }
@@ -314,17 +425,63 @@ public final class AnimationManagerHook {
             Play play = plays[i];
             byNpc.remove(play.npcId, play);
             play.destroy();
-            restoreNpc(play.npc, play.viewer);
+            restoreNpc(play.npc, play.viewer, play.disguise);
         }
         playCount = 0;
         byNpc.clear();
     }
 
-    private void restoreNpc(Entity entity, Player viewer) {
+    private void restoreNpc(Entity entity, Player viewer, SavedDisguise disguise) {
         plugin.getNpcManager().revealToViewer(viewer, entity);
+        // Order matters: re-attach the disguise only after the base entity is shown
+        // again, matching LuxGesturesHook's own proven restore order (showEntity,
+        // then re-disguise) rather than the reverse.
+        restoreDisguise(entity, disguise);
         var hmc = plugin.getHmcCosmeticsHook();
         if (hmc != null && hmc.isEnabled() && entity != null) {
             hmc.resumeAfterGesture(entity, viewer);
+        }
+    }
+
+    /**
+     * Clone and fully strip the NPC's LibsDisguise body (if any) before we start
+     * drawing our own animated packet limbs, so there is nothing left for LibsDisguise
+     * to keep re-broadcasting underneath them. Returns null when there was no disguise
+     * to touch (plain entity, or LibsDisguises not installed).
+     */
+    private SavedDisguise stashDisguise(Player viewer, Entity entity) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LibsDisguises")) return null;
+        try {
+            if (!DisguiseAPI.isDisguised(entity)) return null;
+            Disguise disguise = DisguiseAPI.getDisguise(entity);
+            if (disguise == null) return null;
+            Disguise copy;
+            try {
+                copy = disguise.clone();
+            } catch (Throwable t) {
+                copy = disguise;
+            }
+            DisguiseAPI.undisguiseToAll(entity);
+            return new SavedDisguise(copy, viewer);
+        } catch (Throwable t) {
+            plugin.getLogger().warning("[AnimationManagerHook] could not clear disguise for play: " + t.getMessage());
+            return null;
+        }
+    }
+
+    /** Re-attach the disguise saved by stashDisguise() once our packet limbs are gone. */
+    private void restoreDisguise(Entity entity, SavedDisguise saved) {
+        if (saved == null || saved.disguise() == null || entity == null || !entity.isValid()) return;
+        if (!Bukkit.getPluginManager().isPluginEnabled("LibsDisguises")) return;
+        try {
+            Player viewer = saved.viewer();
+            if (viewer != null && viewer.isOnline()) {
+                DisguiseAPI.disguiseToPlayers(entity, saved.disguise(), viewer);
+            } else {
+                DisguiseAPI.disguiseToAll(entity, saved.disguise());
+            }
+        } catch (Throwable t) {
+            plugin.getLogger().warning("[AnimationManagerHook] could not restore disguise after play: " + t.getMessage());
         }
     }
 
@@ -362,7 +519,7 @@ public final class AnimationManagerHook {
         final float[] pos;
         final float[] rot;
         final boolean[] hidden;
-        final int[] ids;
+        final ArmorStand[] stands;
         final boolean[] holding;
         final Location loc = new Location(null, 0, 0, 0);
         ItemStack[] items;
@@ -375,9 +532,18 @@ public final class AnimationManagerHook {
         double lastZ;
         float lastYaw;
         int lastFrame = Integer.MIN_VALUE;
+        // Not final: set right after resolveLimbItems has read the skin off the
+        // still-attached disguise (see play() below) - null until then.
+        SavedDisguise disguise;
+        // The debounced spawn task waiting for resolveLimbItems' items to settle
+        // (see play() below) - null once spawn() has actually run, or if nothing
+        // is currently pending.
+        BukkitTask pendingSpawn;
+        // TEMP DEBUG counter - see the resolveLimbItems callback log line above.
+        int itemCallbacks;
 
         Play(Player viewer, Entity npc, UUID npcId, int boneCount, int ticks, byte loop,
-             float[] pos, float[] rot, boolean[] hidden) {
+             float[] pos, float[] rot, boolean[] hidden, SavedDisguise disguise) {
             this.viewer = viewer;
             this.npc = npc;
             this.npcId = npcId;
@@ -387,41 +553,87 @@ public final class AnimationManagerHook {
             this.pos = pos;
             this.rot = rot;
             this.hidden = hidden;
-            this.ids = new int[boneCount];
+            this.stands = new ArmorStand[boneCount];
             this.holding = new boolean[boneCount];
+            this.disguise = disguise;
         }
 
         void spawn(ItemStack[] resolved) {
             if (dead || spawned || viewer == null || !viewer.isOnline() || !npc.isValid()) return;
             this.items = resolved;
             Location base = npc.getLocation(loc);
+            // CRITICAL: base and loc are THE SAME OBJECT — Entity#getLocation(Location)
+            // mutates and returns the passed-in instance. poseInto() below writes each
+            // bone's computed world position back into loc (== base). If we read
+            // base.getX()/getY()/getZ() *inside* the loop (as arguments evaluated at
+            // each iteration), every bone after the first reads the PREVIOUS bone's
+            // already-offset position instead of the NPC's stable base location, so
+            // each bone's offset compounds onto wherever the last one landed. That is
+            // exactly what produced the "scattered pile that assembles a few frames
+            // later" bug: bones 1..N spawned at wildly cascading, wrong coordinates,
+            // then tick() (which correctly snapshots bx/by/bz into local doubles
+            // BEFORE its loop) recomputed the correct positions on the very next
+            // update and snapped everything into place. Snapshotting bx/by/bz here too
+            // — before the loop, as primitives independent of loc's mutation — fixes
+            // it exactly the way tick() already does it.
+            double bx = base.getX();
+            double by = base.getY();
+            double bz = base.getZ();
             float yaw = base.getYaw();
             double sin = Math.sin(yaw * DEG2RAD);
             double cos = Math.cos(yaw * DEG2RAD);
-            int poseBase = 0;
+            // Spawn straight into whatever frame playback has already reached, instead
+            // of always frame 0. resolveLimbItems() resolves skin/item textures
+            // asynchronously and can take several ticks; tick() keeps advancing `frame`
+            // the whole time (it only skips sending packets while !spawned). Spawning
+            // at a hardcoded frame 0 meant the limbs always first appeared in the
+            // clip's very first pose, then immediately teleported/re-posed to the real
+            // (already-elapsed) frame on the very next tick — a visible "scatter, then
+            // snap into place" pop right after the NPC appears. Sampling the CURRENT
+            // frame here instead makes the limbs render already in the correct pose on
+            // their very first packet, with no follow-up jump.
+            int sampled = wrapFrame();
+            int poseBase = sampled * boneCount * 3;
+            int hideBase = sampled * boneCount;
             for (int i = 0; i < boneCount; i++) {
                 int o = poseBase + i * 3;
-                poseInto(o, base.getX(), base.getY(), base.getZ(), sin, cos, yaw);
+                poseInto(o, bx, by, bz, sin, cos, yaw);
+                boolean hide = hidden[hideBase + i];
                 ItemStack hand = item(i);
-                boolean hide = hidden[i];
-                ids[i] = PacketHelper.spawnLimbStand(
-                        viewer, loc, hide ? null : hand, rot[o], rot[o + 1], rot[o + 2]);
+                stands[i] = PacketHelper.spawnLimbStandReal(
+                        plugin, viewer, loc, hide ? null : hand, rot[o], rot[o + 1], rot[o + 2]);
                 holding[i] = !hide && hand != null && !hand.getType().isAir();
             }
             spawned = true;
-            lastX = base.getX();
-            lastY = base.getY();
-            lastZ = base.getZ();
+            lastX = bx;
+            lastY = by;
+            lastZ = bz;
             lastYaw = yaw;
-            lastFrame = 0;
+            lastFrame = sampled;
+            // TEMP DEBUG: confirms whether spawn() really did land on the frozen
+            // frame 0 (frame should read 0 here - if it doesn't, something is
+            // advancing playback before spawn(), which would explain a wrong initial
+            // pose) and how many limb stands actually came back alive.
+            plugin.getLogger().info("[AnimationManagerHook] spawn(): frame=" + frame + " sampled=" + sampled
+                    + " boneCount=" + boneCount + " liveLimbs=" + liveLimbCount());
             if (hasLimbs()) {
                 viewer.hideEntity(plugin, npc);
+                // The disguise itself (if any) was already fully stripped in
+                // stashDisguise() before this Play was even constructed - see the
+                // SavedDisguise javadoc. Nothing further to hide here.
             }
         }
 
         boolean hasLimbs() {
-            for (int id : ids) if (id != 0) return true;
+            for (ArmorStand stand : stands) if (stand != null && stand.isValid()) return true;
             return false;
+        }
+
+        // TEMP DEBUG helper - see the spawn() log line above.
+        int liveLimbCount() {
+            int n = 0;
+            for (ArmorStand stand : stands) if (stand != null && stand.isValid()) n++;
+            return n;
         }
 
         boolean keepsSession() {
@@ -435,16 +647,17 @@ public final class AnimationManagerHook {
             }
             this.items = resolved;
             for (int i = 0; i < boneCount; i++) {
-                if (ids[i] == 0) continue;
+                ArmorStand stand = stands[i];
+                if (stand == null || !stand.isValid()) continue;
                 boolean hide = hidden[wrapFrame() * boneCount + i];
                 ItemStack hand = item(i);
                 if (hide) {
                     if (holding[i]) {
-                        PacketHelper.clearEquipment(viewer, ids[i], EquipmentSlot.MAIN_HAND);
+                        stand.getEquipment().setItemInMainHand(null);
                         holding[i] = false;
                     }
                 } else {
-                    PacketHelper.setEquipment(viewer, ids[i], EquipmentSlot.MAIN_HAND, hand);
+                    stand.getEquipment().setItemInMainHand(hand);
                     holding[i] = hand != null && !hand.getType().isAir();
                 }
             }
@@ -455,6 +668,20 @@ public final class AnimationManagerHook {
             if (viewer == null || !viewer.isOnline() || npc == null || !npc.isValid()) {
                 destroy();
                 return false;
+            }
+            if (!spawned) {
+                // Do not advance frame/carry while waiting on the async
+                // resolveLimbItems() resolve (skin lookup off the disguise, item
+                // texture generation, etc - can easily take 15-20+ ticks). frame used
+                // to keep counting the whole time, so by the time spawn() finally ran
+                // it would sample whatever mid-clip frame playback had already
+                // "reached" - often a busy, limbs-flying-outward moment rather than
+                // the clip's authored rest pose, which is exactly why the NPC first
+                // appeared as several disconnected pieces that only "assembled" a few
+                // ticks later as tick() played out the rest of that motion. Freezing
+                // frame here means playback always visibly starts from frame 0 the
+                // instant it becomes visible, no matter how long setup took.
+                return true;
             }
             carry += 1.0D;
             int step = (int) carry;
@@ -482,25 +709,39 @@ public final class AnimationManagerHook {
             int poseBase = sampled * boneCount * 3;
             int hideBase = sampled * boneCount;
             for (int i = 0; i < boneCount; i++) {
-                int id = ids[i];
-                if (id == 0) continue;
+                ArmorStand stand = stands[i];
+                if (stand == null || !stand.isValid()) continue;
                 int o = poseBase + i * 3;
                 poseInto(o, bx, by, bz, sin, cos, yaw);
-                if (moved) {
-                    PacketHelper.teleportFakeEntitySnapped(viewer, id, loc);
+                // "moved" only tracks whether the NPC's own base location/yaw changed -
+                // it says nothing about whether this bone's own animated offset (pos[o])
+                // changed, which happens on almost every frame of a gesture played while
+                // the NPC stands still. Gating the teleport on "moved" alone left each
+                // limb's floating stand frozen at wherever it first spawned any time the
+                // NPC wasn't walking, while its rotation kept animating around that stale
+                // position - looking like the motion was dragging/lagging behind itself.
+                // AnimationManager's own BoneDisplay.update() (the reference renderer)
+                // re-snaps position on every frame advance for exactly this reason.
+                //
+                // (Per-bone dead-zone skipping was tried here as a packet-count
+                // optimization but made early frames visibly stagger bone-by-bone
+                // instead of settling into pose together, so every bone is simply
+                // re-sent on every frame advance - correctness over packet count.)
+                if (moved || poseChanged) {
+                    PacketHelper.repositionLimbStand(viewer, stand, loc);
                 }
                 if (poseChanged) {
-                    PacketHelper.setLimbArmPose(viewer, id, rot[o], rot[o + 1], rot[o + 2]);
+                    stand.setRightArmPose(new EulerAngle(rot[o], rot[o + 1], rot[o + 2]));
                     boolean hide = hidden[hideBase + i];
                     if (hide) {
                         if (holding[i]) {
-                            PacketHelper.clearEquipment(viewer, id, EquipmentSlot.MAIN_HAND);
+                            stand.getEquipment().setItemInMainHand(null);
                             holding[i] = false;
                         }
                     } else if (!holding[i]) {
                         ItemStack hand = item(i);
                         if (hand != null && !hand.getType().isAir()) {
-                            PacketHelper.setEquipment(viewer, id, EquipmentSlot.MAIN_HAND, hand);
+                            stand.getEquipment().setItemInMainHand(hand);
                             holding[i] = true;
                         }
                     }
@@ -517,8 +758,16 @@ public final class AnimationManagerHook {
         void destroy() {
             if (dead) return;
             dead = true;
-            if (spawned && viewer != null && viewer.isOnline()) {
-                PacketHelper.destroyEntities(viewer, ids);
+            if (pendingSpawn != null) {
+                pendingSpawn.cancel();
+                pendingSpawn = null;
+            }
+            if (spawned) {
+                for (ArmorStand stand : stands) {
+                    if (stand != null && stand.isValid()) {
+                        stand.remove();
+                    }
+                }
             }
             spawned = false;
         }

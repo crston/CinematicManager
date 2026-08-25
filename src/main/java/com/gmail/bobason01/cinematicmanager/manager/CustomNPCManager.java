@@ -499,6 +499,32 @@ public class CustomNPCManager {
         }
     }
 
+    /**
+     * Hides (or restores) just the LibsDisguise body, independent of Bukkit's own
+     * per-player entity tracking (hideEntity/showEntity). LibsDisguises runs its own
+     * packet loop for a disguise that is NOT governed by hideEntity/showEntity - see
+     * the comment on revealToViewer(), which already had to re-send the disguise
+     * ("disguiseToPlayers") to bring it back because plain showEntity is not enough.
+     * The same asymmetry bites in the other direction: AnimationManagerHook's
+     * packet-limb Play renderer only calls viewer.hideEntity(...) on the base entity
+     * before drawing its own fake limbs, which does not reliably keep the disguised
+     * body itself from staying visible/reappearing (e.g. on the next move() sync) -
+     * so the real disguised skin and the fake animated limbs render on top of each
+     * other. Call this with suppress=true right after the packet limbs are drawn,
+     * matching how revealToViewer() already flips setInvisible(false) back on when
+     * the play ends.
+     */
+    public void suppressDisguise(Entity entity, boolean suppress) {
+        if (entity == null || !entity.isValid() || !DisguiseAPI.isDisguised(entity)) return;
+        try {
+            Disguise disguise = DisguiseAPI.getDisguise(entity);
+            if (disguise != null) {
+                disguise.getWatcher().setInvisible(suppress);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void hideFromOthers(Player viewer, Entity entity) {
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (!online.getUniqueId().equals(viewer.getUniqueId())) {
