@@ -525,6 +525,69 @@ public final class PacketHelper {
         }
     }
 
+    /**
+     * Same atomic real-ArmorStand technique as spawnLimbStandReal(), but for a
+     * SEPARATE stand that wears one piece of the NPC's actually-equipped gear
+     * (helmet, chestplate, leggings, boots, held weapon/offhand item) in the
+     * matching Bukkit equipment slot, instead of holding a PixelSkin block in the
+     * main hand. This is CinematicManager's equivalent of AnimationManager's own
+     * GearDisplay - see AnimationManagerHook's GEAR_ATTACH table. The NPC's real
+     * equipment is never modified, only cloned onto this stand, so no attribute
+     * modifier baked into the gear (e.g. MMOItems stats) is ever recalculated.
+     *
+     * @param poseKind 0 = head pose, 1 = body pose, 2 = both leg poses, 3 = right arm pose
+     */
+    public static ArmorStand spawnGearStandReal(Plugin plugin, Player viewer, Location loc,
+                                                 org.bukkit.inventory.EquipmentSlot wearSlot, ItemStack item,
+                                                 int poseKind, float rx, float ry, float rz) {
+        if (plugin == null || viewer == null || loc == null || loc.getWorld() == null
+                || wearSlot == null || item == null || item.getType().isAir()) {
+            return null;
+        }
+        try {
+            ArmorStand stand = loc.getWorld().spawn(loc, ArmorStand.class, (ArmorStand spawned) -> {
+                spawned.setPersistent(false);
+                spawned.setInvisible(true);
+                spawned.setCustomNameVisible(false);
+                spawned.setCustomName(null);
+                spawned.setMarker(false);
+                spawned.setGravity(false);
+                spawned.setSilent(true);
+                spawned.setBasePlate(false);
+                spawned.setArms(true);
+                spawned.setSmall(false);
+                spawned.setInvulnerable(true);
+                spawned.setCollidable(false);
+                spawned.setCanPickupItems(false);
+                spawned.setRemoveWhenFarAway(false);
+                spawned.addScoreboardTag("am_gear");
+                lockEquipmentSlots(spawned);
+                spawned.getEquipment().setItem(wearSlot, item);
+                EulerAngle angle = new EulerAngle(rx, ry, rz);
+                switch (poseKind) {
+                    case 0 -> spawned.setHeadPose(angle);
+                    case 1 -> spawned.setBodyPose(angle);
+                    case 2 -> {
+                        spawned.setLeftLegPose(angle);
+                        spawned.setRightLegPose(angle);
+                    }
+                    default -> spawned.setRightArmPose(angle);
+                }
+            });
+            if (stand != null) {
+                UUID viewerId = viewer.getUniqueId();
+                for (Player other : Bukkit.getOnlinePlayers()) {
+                    if (!other.getUniqueId().equals(viewerId)) {
+                        other.hideEntity(plugin, stand);
+                    }
+                }
+            }
+            return stand;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public static int spawnLimbStand(Player viewer, Location loc, ItemStack hand, float rx, float ry, float rz) {
         if (viewer == null || loc == null) return 0;
         int entityId = FAKE_ENTITY_IDS.getAndIncrement();

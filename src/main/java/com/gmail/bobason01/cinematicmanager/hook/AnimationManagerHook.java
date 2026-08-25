@@ -8,7 +8,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.EulerAngle;
@@ -56,6 +59,138 @@ public final class AnimationManagerHook {
      */
     private static final long SPAWN_DEBOUNCE_TICKS = 2L;
 
+    private enum GearPoseKind { HEAD, BODY, LEGS, ARM }
+
+    private record GearAttach(String bone, EquipmentSlot source, EquipmentSlot wear,
+                               GearPoseKind pose, double ox, double oy, double oz) {}
+
+    // Same LimbType.BASE_X/Y/Z constants AnimationManager's own GearDisplay uses to
+    // convert a bone's baked hand-origin into a helmet/chestplate/leggings/boots
+    // pivot point. CinematicManager's Play renderer already mirrors BoneDisplay's
+    // exact bone convention (same clip data, same rig), so these offsets carry over
+    // unchanged.
+    private static final double GEAR_BASE_X = 0.313D;
+    private static final double GEAR_BASE_Y = -1.3520400014901162D;
+    private static final double GEAR_BASE_Z = 0.0D;
+
+    /**
+     * Mirrors AnimationManager's own GearDisplay.ATTACH table exactly (same bone
+     * names, same local offsets, same slot mapping) so the NPC's actually-equipped
+     * armor/weapon follows the animated bones during a CinematicManager-driven
+     * play the same way it already does during a native AnimationManager play -
+     * per the user's request to match "기존 animationmanager" behavior.
+     */
+    private static final GearAttach[] GEAR_ATTACH = {
+            new GearAttach("HEAD", EquipmentSlot.HEAD, EquipmentSlot.HEAD, GearPoseKind.HEAD,
+                    -GEAR_BASE_X, -1.4375D - GEAR_BASE_Y, -GEAR_BASE_Z),
+            new GearAttach("CHEST", EquipmentSlot.CHEST, EquipmentSlot.CHEST, GearPoseKind.BODY,
+                    -GEAR_BASE_X, -1.02D - GEAR_BASE_Y, -GEAR_BASE_Z),
+            new GearAttach("HIP", EquipmentSlot.LEGS, EquipmentSlot.LEGS, GearPoseKind.LEGS,
+                    -GEAR_BASE_X, -0.72D - GEAR_BASE_Y, -GEAR_BASE_Z),
+            new GearAttach("HIP", EquipmentSlot.FEET, EquipmentSlot.FEET, GearPoseKind.LEGS,
+                    -GEAR_BASE_X, -0.22D - GEAR_BASE_Y, -GEAR_BASE_Z),
+            new GearAttach("RIGHT_ARM", EquipmentSlot.HAND, EquipmentSlot.HAND, GearPoseKind.ARM, 0, 0, 0),
+            new GearAttach("LEFT_ARM", EquipmentSlot.OFF_HAND, EquipmentSlot.HAND, GearPoseKind.ARM, 0, 0, 0),
+    };
+
+    // Local-space rotation helpers matching AnimationManager's own Offset class
+    // (com.gmail.bobason01.math.Offset) exactly - not available to us directly
+    // since CinematicManager only soft-depends on AnimationManager via reflection,
+    // so these are small self-contained re-implementations.
+    private static void rotateYaw(double x, double y, double z, double sin, double cos, double[] out) {
+        out[0] = x * cos - z * sin;
+        out[1] = y;
+        out[2] = x * sin + z * cos;
+    }
+
+    private static void relativeOffset(double ox, double oy, double oz, float rx, float ry, float rz, double[] out) {
+        double x = ox;
+        double y = oy;
+        double z = oz;
+        double sin = Math.sin(rx);
+        double cos = Math.cos(rx);
+        double ny = y * cos - z * sin;
+        double nz = y * sin + z * cos;
+        y = ny;
+        z = nz;
+        sin = Math.sin(ry);
+        cos = Math.cos(ry);
+        double nx = x * cos - z * sin;
+        nz = x * sin + z * cos;
+        x = nx;
+        z = nz;
+        sin = Math.sin(rz);
+        cos = Math.cos(rz);
+        nx = x * cos + y * sin;
+        ny = -x * sin + y * cos;
+        out[0] = nx;
+        out[1] = ny;
+        out[2] = nz;
+    }
+
+    private static void applyGearPose(ArmorStand stand, GearPoseKind pose, float rx, float ry, float rz) {
+        EulerAngle angle = new EulerAngle(rx, ry, rz);
+        switch (pose) {
+            case HEAD -> stand.setHeadPose(angle);
+            case BODY -> stand.setBodyPose(angle);
+            case LEGS -> {
+                stand.setLeftLegPose(angle);
+                stand.setRightLegPose(angle);
+            }
+            case ARM -> stand.setRightArmPose(angle);
+        }
+    }
+
+    // Cached once per JVM: LibsDisguises' equipment getters vary a little by watcher
+    // subtype/version (LivingWatcher exposes getHelmet()/getChestplate()/etc AND a
+    // getItemStack(EquipmentSlot) overload depending on build), and CinematicManager
+    // does not compile against LibsDisguises directly for this lookup (unlike the
+    // hard DisguiseAPI/Disguise imports above, which are only used for the
+    // stash/restore round-trip, not for reading equipment) - so this is resolved
+    // reflectively, the same defensive style PacketHelper.lockEquipmentSlots() uses
+    // for Paper-only ArmorStand methods.
+    private static final java.util.Map<EquipmentSlot, String> DISGUISE_GETTER_NAMES = java.util.Map.of(
+            EquipmentSlot.HEAD, "getHelmet",
+            EquipmentSlot.CHEST, "getChestplate",
+            EquipmentSlot.LEGS, "getLeggings",
+            EquipmentSlot.FEET, "getBoots",
+            EquipmentSlot.HAND, "getItemInMainHand",
+            EquipmentSlot.OFF_HAND, "getItemInOffHand"
+    );
+
+    /**
+     * Reads one equipment slot off a LibsDisguise's watcher. Returns null (never
+     * air) if the disguise is null, has no watcher, the watcher doesn't expose
+     * equipment (e.g. a non-living disguise type), or nothing is worn there.
+     * <p>
+     * This is the actual source of "equipped armor" for a disguised NPC:
+     * LibsDisguises' watcher equipment is a presentation-layer overlay independent
+     * of the underlying entity's real Bukkit equipment (an NPC can visibly wear a
+     * diamond helmet through its disguise while entity.getEquipment() reports empty
+     * air) - see spawnGear()'s javadoc in Play.
+     */
+    private static ItemStack disguiseEquipmentItem(Disguise disguise, EquipmentSlot slot) {
+        if (disguise == null) return null;
+        try {
+            Object watcher = disguise.getWatcher();
+            if (watcher == null) return null;
+            try {
+                Method getItemStack = watcher.getClass().getMethod("getItemStack", EquipmentSlot.class);
+                Object result = getItemStack.invoke(watcher, slot);
+                if (result instanceof ItemStack item && !item.getType().isAir()) return item;
+            } catch (Throwable ignored) {
+                // Not every LivingWatcher build exposes the generic overload - fall
+                // through to the named per-slot getter below.
+            }
+            String getter = DISGUISE_GETTER_NAMES.get(slot);
+            if (getter == null) return null;
+            Object result = watcher.getClass().getMethod(getter).invoke(watcher);
+            return result instanceof ItemStack item && !item.getType().isAir() ? item : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private final CinematicManager plugin;
     private final boolean enabled;
 
@@ -70,6 +205,7 @@ public final class AnimationManagerHook {
     private Field clipPos;
     private Field clipRot;
     private Field clipHidden;
+    private Field clipLimbKeys;
 
     private final ConcurrentHashMap<UUID, Play> byNpc = new ConcurrentHashMap<>();
     private Play[] plays = new Play[4];
@@ -115,6 +251,7 @@ public final class AnimationManagerHook {
                 clipPos = clip.getField("pos");
                 clipRot = clip.getField("rot");
                 clipHidden = clip.getField("hidden");
+                clipLimbKeys = clip.getField("limbKeys");
             } catch (Throwable t) {
                 plugin.getLogger().warning("AnimationManager packet clip API missing — using entity play fallback.");
                 packedClip = null;
@@ -173,6 +310,17 @@ public final class AnimationManagerHook {
             plugin.getLogger().warning("AnimationManager clip buffers unreadable: " + t.getMessage());
             return false;
         }
+        // Bone-name lookup for gear attachment (see GEAR_ATTACH) - kept in its own
+        // lenient try/catch so an older AnimationManager build without this field,
+        // or any other reflection hiccup here, only turns off the armor-follows-
+        // bones extra instead of breaking the core animation above.
+        String[] limbKeys = null;
+        try {
+            if (clipLimbKeys != null) {
+                limbKeys = (String[]) clipLimbKeys.get(clip);
+            }
+        } catch (Throwable ignored) {
+        }
         if (bones <= 0 || ticks <= 0 || pos == null || rot == null || hidden == null) {
             plugin.getLogger().warning("AnimationManager: empty clip '" + id + "'");
             return false;
@@ -187,7 +335,7 @@ public final class AnimationManagerHook {
         // the entity (a bare marker ArmorStand) had no skin of its own by the time
         // AnimationManager looked for one, so it silently fell back to the generic
         // Steve texture instead of the NPC's real skin.
-        Play play = new Play(viewer, entity, npcId, bones, ticks, loop, pos, rot, hidden, null);
+        Play play = new Play(viewer, entity, npcId, bones, ticks, loop, pos, rot, hidden, null, limbKeys);
         addPlay(play);
 
         try {
@@ -521,6 +669,13 @@ public final class AnimationManagerHook {
         final boolean[] hidden;
         final ArmorStand[] stands;
         final boolean[] holding;
+        // LimbType.name() per bone, or null if this clip/AnimationManager build
+        // didn't provide one - see GEAR_ATTACH. Null entirely disables the
+        // armor-follows-bones extra for this Play without touching anything else.
+        final String[] limbKeys;
+        // One slot per GEAR_ATTACH entry; null where that attach has no matching
+        // bone in this clip or the NPC has nothing equipped in that slot.
+        final ArmorStand[] gearStands = new ArmorStand[GEAR_ATTACH.length];
         final Location loc = new Location(null, 0, 0, 0);
         ItemStack[] items;
         boolean spawned;
@@ -543,7 +698,7 @@ public final class AnimationManagerHook {
         int itemCallbacks;
 
         Play(Player viewer, Entity npc, UUID npcId, int boneCount, int ticks, byte loop,
-             float[] pos, float[] rot, boolean[] hidden, SavedDisguise disguise) {
+             float[] pos, float[] rot, boolean[] hidden, SavedDisguise disguise, String[] limbKeys) {
             this.viewer = viewer;
             this.npc = npc;
             this.npcId = npcId;
@@ -556,6 +711,140 @@ public final class AnimationManagerHook {
             this.stands = new ArmorStand[boneCount];
             this.holding = new boolean[boneCount];
             this.disguise = disguise;
+            this.limbKeys = limbKeys;
+        }
+
+        private int boneIndexOf(String want) {
+            if (limbKeys == null) return -1;
+            for (int i = 0; i < limbKeys.length; i++) {
+                if (want.equals(limbKeys[i])) return i;
+            }
+            return -1;
+        }
+
+        /**
+         * What item this NPC actually has equipped in the given slot, checked in
+         * priority order: the LibsDisguise watcher first (see the disguise vs. real
+         * equipment note on spawnGear() below), then the real entity's own equipment.
+         * Returns null (never air) when nothing is equipped there from either source.
+         */
+        private ItemStack currentGear(Disguise sourceDisguise, EntityEquipment equipment, EquipmentSlot slot) {
+            ItemStack gear = disguiseEquipmentItem(sourceDisguise, slot);
+            if ((gear == null || gear.getType().isAir()) && equipment != null) {
+                gear = equipment.getItem(slot);
+            }
+            return gear == null || gear.getType().isAir() ? null : gear;
+        }
+
+        /** Fills loc with this attach's current world position, given bx/by/bz/yaw/sin/cos already snapshotted. */
+        private void placeGearLoc(double bx, double by, double bz, float yaw, double sin, double cos,
+                                   int o, GearAttach attach, double[] bonePos, double[] local, double[] localYawed) {
+            rotateYaw(pos[o], pos[o + 1], pos[o + 2], sin, cos, bonePos);
+            relativeOffset(attach.ox(), attach.oy(), attach.oz(), rot[o], rot[o + 1], rot[o + 2], local);
+            rotateYaw(local[0], local[1], local[2], sin, cos, localYawed);
+            loc.setX(bx + bonePos[0] + localYawed[0]);
+            loc.setY(by + bonePos[1] + localYawed[1]);
+            loc.setZ(bz + bonePos[2] + localYawed[2]);
+            loc.setYaw(yaw);
+            loc.setPitch(0f);
+        }
+
+        /**
+         * AnimationManagerHook's equivalent of AnimationManager's own GearDisplay:
+         * one extra, viewer-only ArmorStand per equipped armor/weapon piece, riding
+         * the bone it visually belongs to. The NPC's real equipment is only READ
+         * here (cloned onto these stands), never modified - same reasoning as
+         * AnimationManager's HideController: attribute modifiers baked into the
+         * gear (e.g. MMOItems stats) must never be recalculated by touching it.
+         * <p>
+         * Must be called with the SAME bx/by/bz/yaw/sin/cos/poseBase spawn() already
+         * computed as local primitives - never re-derived from npc.getLocation(loc)
+         * inside this method's own loop, for the exact aliasing reason spawn()'s own
+         * per-bone loop had to be fixed (loc is mutated below on every iteration).
+         */
+        private void spawnGear(double bx, double by, double bz, float yaw, double sin, double cos, int poseBase) {
+            if (limbKeys == null) return;
+            // Two possible sources for "what armor is this NPC wearing", tried in this
+            // order:
+            //  1. The LibsDisguise watcher, if the NPC was disguised (see stashDisguise()
+            //     above - disguise here is the CLONE taken right before undisguising, so
+            //     its watcher still carries whatever helmet/chestplate/etc the disguise
+            //     was set up with). This is very likely THE actual source of "equipped"
+            //     armor for a MythicMobs/LibsDisguise NPC: LibsDisguises' equipment is a
+            //     presentation-layer overlay independent of the underlying entity's real
+            //     Bukkit equipment, so an NPC can visibly wear a diamond helmet through
+            //     its disguise while entity.getEquipment() reports empty air - which is
+            //     exactly why gear was invisible even though everything else here worked.
+            //  2. The underlying entity's real Bukkit equipment, for plain (non-disguised)
+            //     NPCs or as a fallback.
+            Disguise sourceDisguise = disguise != null ? disguise.disguise() : null;
+            EntityEquipment equipment = npc instanceof LivingEntity living ? living.getEquipment() : null;
+            if (sourceDisguise == null && equipment == null) return;
+            double[] bonePos = new double[3];
+            double[] local = new double[3];
+            double[] localYawed = new double[3];
+            for (int g = 0; g < GEAR_ATTACH.length; g++) {
+                GearAttach attach = GEAR_ATTACH[g];
+                int bone = boneIndexOf(attach.bone());
+                if (bone < 0) continue;
+                ItemStack gear = currentGear(sourceDisguise, equipment, attach.source());
+                if (gear == null) continue;
+                int o = poseBase + bone * 3;
+                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
+                gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), gear.clone(),
+                        attach.pose().ordinal(), rot[o], rot[o + 1], rot[o + 2]);
+            }
+        }
+
+        /**
+         * Per-tick counterpart to spawnGear() - see its javadoc for the aliasing
+         * warning. Unlike the base limb loop (whose held-item is fixed by the clip
+         * itself), gear tracks the NPC's LIVE equip state on every pose change: a
+         * piece equipped after spawn() gets its stand created here, one removed gets
+         * its stand despawned, and one swapped for a different item gets re-worn in
+         * place - so "장착한 방어구/무기가 애니메이션 중에도 실제 착용 상태를 따라간다"
+         * holds for the whole play, not just whatever was equipped at the instant it
+         * started.
+         */
+        private void tickGear(double bx, double by, double bz, float yaw, double sin, double cos, int poseBase,
+                               boolean moved, boolean poseChanged) {
+            if (!moved && !poseChanged) return;
+            Disguise sourceDisguise = disguise != null ? disguise.disguise() : null;
+            EntityEquipment equipment = npc instanceof LivingEntity living ? living.getEquipment() : null;
+            double[] bonePos = new double[3];
+            double[] local = new double[3];
+            double[] localYawed = new double[3];
+            for (int g = 0; g < GEAR_ATTACH.length; g++) {
+                GearAttach attach = GEAR_ATTACH[g];
+                int bone = boneIndexOf(attach.bone());
+                if (bone < 0) continue;
+                int o = poseBase + bone * 3;
+                ArmorStand stand = gearStands[g];
+                if (poseChanged) {
+                    ItemStack gear = currentGear(sourceDisguise, equipment, attach.source());
+                    if (gear == null) {
+                        if (stand != null && stand.isValid()) {
+                            stand.remove();
+                        }
+                        gearStands[g] = null;
+                        continue;
+                    }
+                    if (stand == null || !stand.isValid()) {
+                        placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
+                        gearStands[g] = PacketHelper.spawnGearStandReal(plugin, viewer, loc, attach.wear(), gear.clone(),
+                                attach.pose().ordinal(), rot[o], rot[o + 1], rot[o + 2]);
+                        continue; // freshly spawned already at the right pose/position
+                    }
+                    stand.getEquipment().setItem(attach.wear(), gear.clone());
+                }
+                stand = gearStands[g];
+                if (stand == null || !stand.isValid()) continue;
+                placeGearLoc(bx, by, bz, yaw, sin, cos, o, attach, bonePos, local, localYawed);
+                PacketHelper.repositionLimbStand(viewer, stand, loc);
+                if (poseChanged) {
+                    applyGearPose(stand, attach.pose(), rot[o], rot[o + 1], rot[o + 2]);
+                }
+            }
         }
 
         void spawn(ItemStack[] resolved) {
@@ -604,6 +893,7 @@ public final class AnimationManagerHook {
                         plugin, viewer, loc, hide ? null : hand, rot[o], rot[o + 1], rot[o + 2]);
                 holding[i] = !hide && hand != null && !hand.getType().isAir();
             }
+            spawnGear(bx, by, bz, yaw, sin, cos, poseBase);
             spawned = true;
             lastX = bx;
             lastY = by;
@@ -747,6 +1037,7 @@ public final class AnimationManagerHook {
                     }
                 }
             }
+            tickGear(bx, by, bz, yaw, sin, cos, poseBase, moved, poseChanged);
             lastX = bx;
             lastY = by;
             lastZ = bz;
@@ -764,6 +1055,11 @@ public final class AnimationManagerHook {
             }
             if (spawned) {
                 for (ArmorStand stand : stands) {
+                    if (stand != null && stand.isValid()) {
+                        stand.remove();
+                    }
+                }
+                for (ArmorStand stand : gearStands) {
                     if (stand != null && stand.isValid()) {
                         stand.remove();
                     }
